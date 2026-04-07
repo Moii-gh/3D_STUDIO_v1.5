@@ -9,9 +9,28 @@
 @layer base {
   body {
     @apply bg-[#0a0a0a] text-[#E4E3E0] antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+
+  /* Prevent pull-to-refresh */
+  html, body {
+    overscroll-behavior-y: contain;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 }
 
+/* ═══ Toast animation ═══ */
 @keyframes toastIn {
   from {
     opacity: 0;
@@ -20,5 +39,98 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ═══ Mobile drawer animations ═══ */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ═══ Mobile bottom sheet animation ═══ */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* ═══ Pulse glow for active buttons ═══ */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 4px 0 rgba(0, 200, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(0, 200, 255, 0.6);
+  }
+}
+
+/* ═══ Mobile-optimized scrollbar ═══ */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 3px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(228, 227, 224, 0.15);
+    border-radius: 999px;
+  }
+
+  /* Ensure canvas fills screen on mobile */
+  canvas {
+    touch-action: none !important;
+  }
+}
+
+/* ═══ Safe area insets for notched devices ═══ */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
   }
 }

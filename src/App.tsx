@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Scene from './components/Scene';
+import MobileToolbar from './components/MobileToolbar';
 import { ShapeData, ShapeType, GroupData } from './types';
 import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
+import { useIsMobile } from './hooks/useMobile';
 
 export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
 
@@ -22,6 +24,8 @@ export interface ProjectFile {
 const MAX_HISTORY = 50;
 
 export default function App() {
+  const isMobile = useIsMobile();
+
   const [shapes, setShapes] = useState<ShapeData[]>([
     {
       id: 'initial-box',
@@ -58,14 +62,12 @@ export default function App() {
   const pushHistory = useCallback((newShapes: ShapeData[], newGroups: GroupData[]) => {
     if (skipHistoryRef.current) return;
     const idx = historyIndexRef.current;
-    // Trim any future entries
     historyRef.current = historyRef.current.slice(0, idx + 1);
     historyRef.current.push({ shapes: JSON.parse(JSON.stringify(newShapes)), groups: JSON.parse(JSON.stringify(newGroups)) });
     if (historyRef.current.length > MAX_HISTORY) historyRef.current.shift();
     historyIndexRef.current = historyRef.current.length - 1;
   }, []);
 
-  // Track changes to push history
   const prevShapesRef = useRef(shapes);
   const prevGroupsRef = useRef(groups);
   useEffect(() => {
@@ -115,7 +117,7 @@ export default function App() {
     showToast('Redo');
   }, []);
 
-  // ─── Save / Load project (File System Access API) ───
+  // ─── Save / Load project ───
   const handleSaveProject = useCallback(async () => {
     const date = new Date();
     const ts = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}_${String(date.getHours()).padStart(2,'0')}-${String(date.getMinutes()).padStart(2,'0')}`;
@@ -130,7 +132,6 @@ export default function App() {
     const jsonStr = JSON.stringify(project);
 
     try {
-      // Native "Save As" dialog — trusted by Windows
       const handle = await (window as any).showSaveFilePicker({
         suggestedName: `${name}.json`,
         types: [{
@@ -151,7 +152,6 @@ export default function App() {
 
   const handleLoadProject = useCallback(async () => {
     try {
-      // Native "Open" dialog — trusted by Windows
       const [handle] = await (window as any).showOpenFilePicker({
         types: [{
           description: '3D Studio Project',
@@ -186,8 +186,6 @@ export default function App() {
       }
     }
   }, [showToast]);
-
-
 
   // ─── Selection (group-aware) ───
   const handleSelect = useCallback((id: string | null, additive?: boolean) => {
@@ -230,7 +228,6 @@ export default function App() {
     if (primarySelectedId) {
       const sel = shapes.find(s => s.id === primarySelectedId);
       if (sel) {
-        // Smart placement: stack on top using bounding-box awareness
         const selBBox = getShapeBBox(sel);
         const newHalf = getShapeBBox({ ...sel, type, scale: [1,1,1], position: [0,0,0], rotation: [0,0,0], color: '', id: '' }).halfSize;
         position = [selBBox.center[0], selBBox.max[1] + newHalf[1], selBBox.center[2]];
@@ -273,7 +270,6 @@ export default function App() {
       if (!primary) return prev;
 
       let finalUpdates = { ...updates };
-      // Smart snap for the primary shape
       if (smartSnapEnabled && updates.position) {
         const testShape = { ...primary, ...updates };
         const result = computeSmartSnap(testShape, updates.position, prev, true);
@@ -385,8 +381,9 @@ export default function App() {
 
   const handleResetCamera = useCallback(() => { setResetCameraFlag(f => f+1); showToast('Camera reset'); }, [showToast]);
 
-  // ─── Keyboard shortcuts ───
+  // ─── Keyboard shortcuts (desktop only) ───
   useEffect(() => {
+    if (isMobile) return;
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -417,27 +414,32 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
+  }, [isMobile, handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
 
   return (
     <div className="flex h-screen w-screen bg-[#0a0a0a] overflow-hidden text-[#E4E3E0]">
-      <Sidebar
-        shapes={shapes} groups={groups} selectedIds={selectedIds}
-        snapToGrid={snapToGrid} smartSnap={smartSnapEnabled} transformMode={transformMode} clipboard={clipboard}
-        canUndo={canUndo} canRedo={canRedo}
-        onUndo={handleUndo} onRedo={handleRedo}
-        onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-        onToggleSmartSnap={() => { setSmartSnapEnabled(!smartSnapEnabled); showToast(smartSnapEnabled ? 'Smart Snap OFF' : 'Smart Snap ON'); }}
-        onChangeTransformMode={setTransformMode}
-        onSelect={handleSelect} onSelectAll={handleSelectAll}
-        onAdd={handleAddShape} onUpdate={handleUpdateShape}
-        onDelete={handleDeleteShape} onDeleteSelected={handleDeleteSelected}
-        onCopy={handleCopy} onPaste={handlePaste} onDuplicate={handleDuplicate}
-        onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
-        onToggleGroupCollapse={handleToggleGroupCollapse}
-        onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
-        onResetCamera={handleResetCamera}
-      />
+      {/* Desktop sidebar */}
+      {!isMobile && (
+        <Sidebar
+          shapes={shapes} groups={groups} selectedIds={selectedIds}
+          snapToGrid={snapToGrid} smartSnap={smartSnapEnabled} transformMode={transformMode} clipboard={clipboard}
+          canUndo={canUndo} canRedo={canRedo}
+          onUndo={handleUndo} onRedo={handleRedo}
+          onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+          onToggleSmartSnap={() => { setSmartSnapEnabled(!smartSnapEnabled); showToast(smartSnapEnabled ? 'Smart Snap OFF' : 'Smart Snap ON'); }}
+          onChangeTransformMode={setTransformMode}
+          onSelect={handleSelect} onSelectAll={handleSelectAll}
+          onAdd={handleAddShape} onUpdate={handleUpdateShape}
+          onDelete={handleDeleteShape} onDeleteSelected={handleDeleteSelected}
+          onCopy={handleCopy} onPaste={handlePaste} onDuplicate={handleDuplicate}
+          onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
+          onToggleGroupCollapse={handleToggleGroupCollapse}
+          onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
+          onResetCamera={handleResetCamera}
+        />
+      )}
+
+      {/* 3D Scene — full screen on mobile */}
       <main className="flex-1 relative">
         <Scene
           shapes={shapes} selectedIds={selectedIds}
@@ -446,6 +448,7 @@ export default function App() {
           resetCameraFlag={resetCameraFlag}
           historyLength={historyRef.current.length}
           historyIndex={historyIndexRef.current}
+          isMobile={isMobile}
           onSelect={handleSelect} onUpdate={handleUpdateShape}
           onGroupTransform={handleGroupTransform} onMultiSelect={handleMultiSelect}
           onSave={handleSaveProject} onLoad={handleLoadProject}
@@ -453,9 +456,33 @@ export default function App() {
           canUndo={canUndo} canRedo={canRedo}
           onClearGuides={() => setActiveGuides([])}
         />
+
+        {/* Mobile toolbar overlay */}
+        {isMobile && (
+          <MobileToolbar
+            shapes={shapes} groups={groups} selectedIds={selectedIds}
+            snapToGrid={snapToGrid} smartSnap={smartSnapEnabled} transformMode={transformMode} clipboard={clipboard}
+            canUndo={canUndo} canRedo={canRedo}
+            onUndo={handleUndo} onRedo={handleRedo}
+            onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+            onToggleSmartSnap={() => { setSmartSnapEnabled(!smartSnapEnabled); showToast(smartSnapEnabled ? 'Smart Snap OFF' : 'Smart Snap ON'); }}
+            onChangeTransformMode={setTransformMode}
+            onSelect={handleSelect} onSelectAll={handleSelectAll}
+            onAdd={handleAddShape} onUpdate={handleUpdateShape}
+            onDelete={handleDeleteShape} onDeleteSelected={handleDeleteSelected}
+            onCopy={handleCopy} onPaste={handlePaste} onDuplicate={handleDuplicate}
+            onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
+            onToggleGroupCollapse={handleToggleGroupCollapse}
+            onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
+            onResetCamera={handleResetCamera}
+            onSave={handleSaveProject} onLoad={handleLoadProject}
+          />
+        )}
+
+        {/* Toast */}
         {toast && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-            <div className="bg-[#1a1a1a]/90 backdrop-blur-md border border-[#E4E3E0]/20 px-6 py-2.5 rounded font-mono text-xs uppercase tracking-widest text-[#E4E3E0] shadow-xl"
+          <div className={`absolute ${isMobile ? 'top-16' : 'top-6'} left-1/2 -translate-x-1/2 z-50 pointer-events-none`}>
+            <div className="bg-[#1a1a1a]/90 backdrop-blur-md border border-[#E4E3E0]/20 px-6 py-2.5 rounded-xl font-mono text-xs uppercase tracking-widest text-[#E4E3E0] shadow-xl"
               style={{ animation: 'toastIn 0.25s ease-out' }}>
               {toast}
             </div>
