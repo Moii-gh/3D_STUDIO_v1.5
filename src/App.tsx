@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Scene from './components/Scene';
 import { ShapeData, ShapeType, GroupData } from './types';
+import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
 
 export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
 
@@ -34,6 +35,8 @@ export default function App() {
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [smartSnapEnabled, setSmartSnapEnabled] = useState(true);
+  const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
   const [transformMode, setTransformMode] = useState<TransformMode>('select');
   const [clipboard, setClipboard] = useState<{ shapes: ShapeData[]; groups: GroupData[] } | null>(null);
   const [resetCameraFlag, setResetCameraFlag] = useState(0);
@@ -226,7 +229,12 @@ export default function App() {
     let position: [number, number, number] = [0, 0.5, 0];
     if (primarySelectedId) {
       const sel = shapes.find(s => s.id === primarySelectedId);
-      if (sel) position = [sel.position[0], sel.position[1] + sel.scale[1], sel.position[2]];
+      if (sel) {
+        // Smart placement: stack on top using bounding-box awareness
+        const selBBox = getShapeBBox(sel);
+        const newHalf = getShapeBBox({ ...sel, type, scale: [1,1,1], position: [0,0,0], rotation: [0,0,0], color: '', id: '' }).halfSize;
+        position = [selBBox.center[0], selBBox.max[1] + newHalf[1], selBBox.center[2]];
+      }
     }
     const newShape: ShapeData = {
       id: Math.random().toString(36).substr(2, 9), type, position,
@@ -239,36 +247,58 @@ export default function App() {
   }, [primarySelectedId, shapes]);
 
   const handleUpdateShape = useCallback((id: string, updates: Partial<ShapeData>) => {
-    setShapes(prev => prev.map(shape => {
-      if (shape.id !== id) return shape;
-      const ns = { ...shape, ...updates };
-      if (snapToGrid && updates.position) {
-        ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
-      }
-      return ns;
-    }));
-  }, [snapToGrid]);
+    setShapes(prev => {
+      const newShapes = prev.map(shape => {
+        if (shape.id !== id) return shape;
+        const ns = { ...shape, ...updates };
+        if (snapToGrid && updates.position) {
+          ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
+        }
+        if (smartSnapEnabled && updates.position) {
+          const result = computeSmartSnap(ns, ns.position, prev, true);
+          ns.position = result.position;
+          setActiveGuides(result.guides);
+        } else if (updates.position) {
+          setActiveGuides([]);
+        }
+        return ns;
+      });
+      return newShapes;
+    });
+  }, [snapToGrid, smartSnapEnabled]);
 
   const handleGroupTransform = useCallback((id: string, updates: Partial<ShapeData>) => {
     setShapes(prev => {
       const primary = prev.find(s => s.id === id);
       if (!primary) return prev;
-      const posDelta: [number,number,number] = updates.position
-        ? [updates.position[0]-primary.position[0], updates.position[1]-primary.position[1], updates.position[2]-primary.position[2]]
+
+      let finalUpdates = { ...updates };
+      // Smart snap for the primary shape
+      if (smartSnapEnabled && updates.position) {
+        const testShape = { ...primary, ...updates };
+        const result = computeSmartSnap(testShape, updates.position, prev, true);
+        finalUpdates.position = result.position;
+        setActiveGuides(result.guides);
+      } else if (updates.position) {
+        setActiveGuides([]);
+      }
+
+      const posDelta: [number,number,number] = finalUpdates.position
+        ? [finalUpdates.position[0]-primary.position[0], finalUpdates.position[1]-primary.position[1], finalUpdates.position[2]-primary.position[2]]
         : [0,0,0];
       return prev.map(shape => {
         if (shape.id === id) {
-          const ns = { ...shape, ...updates };
-          if (snapToGrid && updates.position) ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
+          const ns = { ...shape, ...finalUpdates };
+          if (snapToGrid && finalUpdates.position) ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
           return ns;
         }
-        if (primary.groupId && shape.groupId === primary.groupId && updates.position) {
+        if (primary.groupId && shape.groupId === primary.groupId && finalUpdates.position) {
           return { ...shape, position: [shape.position[0]+posDelta[0], shape.position[1]+posDelta[1], shape.position[2]+posDelta[2]] as [number,number,number] };
         }
         return shape;
       });
     });
-  }, [snapToGrid]);
+  }, [snapToGrid, smartSnapEnabled]);
 
   const handleDeleteShape = useCallback((id: string) => {
     setShapes(prev => prev.filter(s => s.id !== id));
@@ -393,10 +423,11 @@ export default function App() {
     <div className="flex h-screen w-screen bg-[#0a0a0a] overflow-hidden text-[#E4E3E0]">
       <Sidebar
         shapes={shapes} groups={groups} selectedIds={selectedIds}
-        snapToGrid={snapToGrid} transformMode={transformMode} clipboard={clipboard}
+        snapToGrid={snapToGrid} smartSnap={smartSnapEnabled} transformMode={transformMode} clipboard={clipboard}
         canUndo={canUndo} canRedo={canRedo}
         onUndo={handleUndo} onRedo={handleRedo}
         onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+        onToggleSmartSnap={() => { setSmartSnapEnabled(!smartSnapEnabled); showToast(smartSnapEnabled ? 'Smart Snap OFF' : 'Smart Snap ON'); }}
         onChangeTransformMode={setTransformMode}
         onSelect={handleSelect} onSelectAll={handleSelectAll}
         onAdd={handleAddShape} onUpdate={handleUpdateShape}
@@ -411,6 +442,7 @@ export default function App() {
         <Scene
           shapes={shapes} selectedIds={selectedIds}
           transformMode={transformMode} snapToGrid={snapToGrid}
+          smartSnap={smartSnapEnabled} activeGuides={activeGuides}
           resetCameraFlag={resetCameraFlag}
           historyLength={historyRef.current.length}
           historyIndex={historyIndexRef.current}
@@ -419,6 +451,7 @@ export default function App() {
           onSave={handleSaveProject} onLoad={handleLoadProject}
           onUndo={handleUndo} onRedo={handleRedo}
           canUndo={canUndo} canRedo={canRedo}
+          onClearGuides={() => setActiveGuides([])}
         />
         {toast && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">

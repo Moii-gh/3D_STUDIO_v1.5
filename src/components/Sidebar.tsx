@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformMode } from '../App';
@@ -9,6 +9,7 @@ interface SidebarProps {
   groups: GroupData[];
   selectedIds: Set<string>;
   snapToGrid: boolean;
+  smartSnap: boolean;
   transformMode: TransformMode;
   clipboard: { shapes: ShapeData[]; groups: GroupData[] } | null;
   canUndo: boolean;
@@ -16,6 +17,7 @@ interface SidebarProps {
   onUndo: () => void;
   onRedo: () => void;
   onToggleSnap: () => void;
+  onToggleSmartSnap: () => void;
   onChangeTransformMode: (mode: TransformMode) => void;
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectAll: () => void;
@@ -64,9 +66,9 @@ const ALL_SHAPES: ShapeType[] = [
 ];
 
 export default function Sidebar({
-  shapes, groups, selectedIds, snapToGrid, transformMode, clipboard,
+  shapes, groups, selectedIds, snapToGrid, smartSnap, transformMode, clipboard,
   canUndo, canRedo, onUndo, onRedo,
-  onToggleSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
+  onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
   onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera
 }: SidebarProps) {
@@ -128,15 +130,28 @@ export default function Sidebar({
         
         <div className="flex items-center justify-between mb-4">
           <div className="text-[10px] uppercase opacity-50 tracking-widest">Library_Primitives</div>
-          <button 
-            onClick={onToggleSnap}
-            className={`flex items-center gap-2 px-2 py-1 border rounded transition-colors ${
-              snapToGrid ? 'bg-green-500/20 border-green-500 text-green-400' : 'border-[#E4E3E0]/20 opacity-50'
-            }`}
-          >
-            <Grid size={12} />
-            <span>SNAP</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button 
+              onClick={onToggleSmartSnap}
+              className={`flex items-center gap-1.5 px-2 py-1 border rounded transition-colors ${
+                smartSnap ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'border-[#E4E3E0]/20 opacity-50'
+              }`}
+              title="Smart Snap: intelligent surface/edge snapping"
+            >
+              <Magnet size={12} />
+              <span>SMART</span>
+            </button>
+            <button 
+              onClick={onToggleSnap}
+              className={`flex items-center gap-1.5 px-2 py-1 border rounded transition-colors ${
+                snapToGrid ? 'bg-green-500/20 border-green-500 text-green-400' : 'border-[#E4E3E0]/20 opacity-50'
+              }`}
+              title="Grid Snap: snap to 0.5 grid"
+            >
+              <Grid size={12} />
+              <span>GRID</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-5 gap-2 mb-4 max-h-40 overflow-y-auto pr-2">

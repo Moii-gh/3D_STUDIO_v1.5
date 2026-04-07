@@ -1,16 +1,19 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, PerspectiveCamera, Environment, ContactShadows, TransformControls, Text } from '@react-three/drei';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { OrbitControls, Grid, PerspectiveCamera, Environment, ContactShadows, TransformControls, Text, Line, PointerLockControls } from '@react-three/drei';
 import { ShapeData } from '../types';
+import { SnapGuide } from '../smartSnap';
 import * as THREE from 'three';
 import { TransformMode } from '../App';
-import { Download, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings } from 'lucide-react';
 
 interface SceneProps {
   shapes: ShapeData[];
   selectedIds: Set<string>;
   transformMode: TransformMode;
   snapToGrid: boolean;
+  smartSnap: boolean;
+  activeGuides: SnapGuide[];
   resetCameraFlag: number;
   historyLength: number;
   historyIndex: number;
@@ -24,6 +27,7 @@ interface SceneProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onClearGuides: () => void;
 }
 
 // ═══ Custom shapes ═══
@@ -137,13 +141,65 @@ function CameraExposer({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
   return null;
 }
 
+// ═══ First Person Controller (Minecraft-like WASD) ═══
+function FirstPersonController() {
+  const { camera } = useThree();
+  const moveState = useRef({ forward: false, backward: false, left: false, right: false, up: false, down: false });
+  const speed = 0.1;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case 'KeyW': moveState.current.forward = true; break;
+        case 'KeyS': moveState.current.backward = true; break;
+        case 'KeyA': moveState.current.left = true; break;
+        case 'KeyD': moveState.current.right = true; break;
+        case 'Space': moveState.current.up = true; break;
+        case 'ShiftLeft': moveState.current.down = true; break;
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case 'KeyW': moveState.current.forward = false; break;
+        case 'KeyS': moveState.current.backward = false; break;
+        case 'KeyA': moveState.current.left = false; break;
+        case 'KeyD': moveState.current.right = false; break;
+        case 'Space': moveState.current.up = false; break;
+        case 'ShiftLeft': moveState.current.down = false; break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useFrame(() => {
+    if (moveState.current.forward) camera.translateZ(-speed);
+    if (moveState.current.backward) camera.translateZ(speed);
+    if (moveState.current.left) camera.translateX(-speed);
+    if (moveState.current.right) camera.translateX(speed);
+    if (moveState.current.up) camera.position.y += speed;
+    if (moveState.current.down) camera.position.y -= speed;
+  });
+
+  return <PointerLockControls />;
+}
+
 // ═══ Main Scene ═══
-export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, resetCameraFlag, historyLength, historyIndex, onSelect, onUpdate, onGroupTransform, onMultiSelect, onSave, onLoad, onUndo, onRedo, canUndo, canRedo }: SceneProps) {
+export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, onSelect, onUpdate, onGroupTransform, onMultiSelect, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
   const orbitRef = useRef<any>(null);
   const transformRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const marqueeDidDrag = useRef(false);
+
+  // FPS Mode
+  const [isFirstPerson, setIsFirstPerson] = useState(false);
+  // Settings Mode
+  const [showSettings, setShowSettings] = useState(false);
 
   // Marquee state
   const [marquee, setMarquee] = useState<{ sx: number; sy: number; ex: number; ey: number } | null>(null);
@@ -201,6 +257,8 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
         scale: [obj.scale.x, obj.scale.y, obj.scale.z],
       });
     }
+    // Clear guides after transform done
+    setTimeout(() => onClearGuides(), 300);
   };
 
   // ═══ Marquee selection handlers ═══
@@ -279,7 +337,11 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
     >
       <Canvas shadows dpr={[1, 2]}>
         <PerspectiveCamera makeDefault position={[5, 5, 5]} />
-        <OrbitControls ref={orbitRef} makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
+        {isFirstPerson ? (
+          <FirstPersonController />
+        ) : (
+          <OrbitControls ref={orbitRef} makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
+        )}
         <CameraController resetFlag={resetCameraFlag} />
         <CameraExposer cameraRef={cameraRef} />
 
@@ -304,7 +366,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
         {showGizmo && selectedShape && (
           <TransformControls ref={transformRef}
-            mode={transformMode === 'select' ? 'translate' : transformMode}
+            mode={transformMode as 'translate' | 'rotate' | 'scale'}
             translationSnap={snapToGrid ? 0.5 : null}
             rotationSnap={snapToGrid ? Math.PI / 4 : null}
             scaleSnap={snapToGrid ? 0.5 : null}
@@ -323,6 +385,22 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
         <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={20} blur={2} far={4.5} />
 
+        {/* ═══ Smart Snap Guide Lines ═══ */}
+        {smartSnap && activeGuides.map((guide, i) => {
+          const color = guide.type === 'surface' ? '#a855f7' : guide.type === 'alignment' ? '#06b6d4' : '#22c55e';
+          return (
+            <Line
+              key={`guide-${i}`}
+              points={[guide.from, guide.to]}
+              color={color}
+              lineWidth={2}
+              dashed
+              dashSize={0.15}
+              gapSize={0.1}
+            />
+          );
+        })}
+
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow
           onClick={() => { if (!marqueeDidDrag.current) onSelect(null); }}>
           <planeGeometry args={[100, 100]} />
@@ -333,30 +411,41 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
       {/* Marquee rectangle */}
       {marqueeStyle && <div style={marqueeStyle} />}
 
-      {/* Select mode indicator */}
-      {transformMode === 'select' && (
-        <div className="absolute top-6 left-6 pointer-events-none z-10">
-          <div className="bg-cyan-500/15 backdrop-blur border border-cyan-500/40 px-4 py-2 rounded font-mono text-[10px] text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            Select_Mode — Click or drag to select
-          </div>
-        </div>
-      )}
+
 
       {/* Overlay UI — top right */}
       <div className="absolute top-6 right-6 flex flex-col items-end gap-3 z-10">
-        {/* Save / Load buttons */}
         <div className="flex items-center gap-2">
-          <button onClick={onSave}
-            className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
-            title="Save project (.3dstudio)">
-            <Download size={12} /><span>Save</span>
+          {/* FPS Mode */}
+          <button onClick={() => setIsFirstPerson(!isFirstPerson)}
+            className={`flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${isFirstPerson ? 'border-cyan-500 text-cyan-400' : 'border-[#E4E3E0]/10 text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414]'}`}
+            title="First Person Flying Mode (WASD + Mouse)">
+            {isFirstPerson ? <EyeOff size={12} /> : <Eye size={12} />}
+            <span>FPS</span>
           </button>
-          <button onClick={onLoad}
-            className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
-            title="Load project (.3dstudio)">
-            <Upload size={12} /><span>Load</span>
-          </button>
+          
+          {/* Settings Menu Button */}
+          <div className="relative">
+            <button onClick={() => setShowSettings(!showSettings)}
+              className={`flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${showSettings ? 'border-[#E4E3E0] text-[#E4E3E0]' : 'border-[#E4E3E0]/10 text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414]'}`}
+              title="Настройки">
+              <Settings size={12} /><span>Настройки</span>
+            </button>
+            
+            {showSettings && (
+              <div className="absolute top-full right-0 mt-2 bg-[#141414]/90 backdrop-blur-md border border-[#E4E3E0]/20 rounded p-2 min-w-[200px] shadow-2xl flex flex-col gap-2 z-50">
+                <div className="text-[#E4E3E0]/50 text-[10px] uppercase tracking-widest mb-1 px-2">Параметры</div>
+                <a 
+                  href="https://vk.com/moii.unlim" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full text-left px-3 py-2 rounded text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414] font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                >
+                   <span>Написать разработчику</span>
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* History step navigator */}
@@ -383,21 +472,20 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
         </div>
       </div>
 
-      <div className="absolute bottom-6 left-6 pointer-events-none">
-        <div className="bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 p-4 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest">
-          <div className="opacity-50 mb-2">Shortcuts</div>
-          <div className="space-y-1">
-            <div>Q: Select_Tool</div>
-            <div>G/R/S: Move/Rotate/Scale</div>
-            <div>Ctrl+Z: Undo</div>
-            <div>Ctrl+Shift+Z: Redo</div>
-            <div>Ctrl+C/V: Copy/Paste</div>
-            <div>Ctrl+D: Duplicate</div>
-            <div>Ctrl+G: Group</div>
-            <div>Del: Delete · H: Reset_Cam</div>
-          </div>
-        </div>
+      {/* Overlay UI — bottom right */}
+      <div className="absolute bottom-6 right-6 flex items-center gap-2 z-10">
+        <button onClick={onSave}
+          className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
+          title="Save project (.3dstudio)">
+          <Download size={12} /><span>Сохранить</span>
+        </button>
+        <button onClick={onLoad}
+          className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
+          title="Load project (.3dstudio)">
+          <Upload size={12} /><span>Загрузить</span>
+        </button>
       </div>
+
     </div>
   );
 }
