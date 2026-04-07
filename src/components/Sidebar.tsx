@@ -1,0 +1,429 @@
+import React, { useState } from 'react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { ShapeData, ShapeType, GroupData } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { TransformMode } from '../App';
+
+interface SidebarProps {
+  shapes: ShapeData[];
+  groups: GroupData[];
+  selectedIds: Set<string>;
+  snapToGrid: boolean;
+  transformMode: TransformMode;
+  clipboard: { shapes: ShapeData[]; groups: GroupData[] } | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onToggleSnap: () => void;
+  onChangeTransformMode: (mode: TransformMode) => void;
+  onSelect: (id: string | null, additive?: boolean) => void;
+  onSelectAll: () => void;
+  onAdd: (type: ShapeType) => void;
+  onUpdate: (id: string, updates: Partial<ShapeData>) => void;
+  onDelete: (id: string) => void;
+  onDeleteSelected: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  onDuplicate: () => void;
+  onCreateGroup: () => void;
+  onUngroup: (groupId: string) => void;
+  onToggleGroupCollapse: (groupId: string) => void;
+  onSelectGroup: (groupId: string) => void;
+  onRenameGroup: (groupId: string, name: string) => void;
+  onResetCamera: () => void;
+}
+
+const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
+  box: <Box size={18} />,
+  sphere: <Circle size={18} />,
+  cylinder: <Cylinder size={18} />,
+  cone: <Cone size={18} />,
+  torus: <RotateCw size={18} />,
+  pyramid: <Triangle size={18} />,
+  capsule: <Pill size={18} />,
+  octahedron: <Diamond size={18} />,
+  dodecahedron: <Hexagon size={18} />,
+  prism: <Triangle size={18} className="rotate-90" />,
+  icosahedron: <Globe size={18} />,
+  tetrahedron: <Triangle size={18} />,
+  torusKnot: <Command size={18} />,
+  ring: <CircleDashed size={18} />,
+  plane: <Square size={18} />,
+  circle: <Circle size={18} />,
+  star: <Star size={18} />,
+  heart: <Heart size={18} />,
+  arrow: <ArrowUp size={18} />,
+  cross: <Plus size={18} />,
+  text: <Type size={18} />,
+};
+
+const ALL_SHAPES: ShapeType[] = [
+  'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
+  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text'
+];
+
+export default function Sidebar({
+  shapes, groups, selectedIds, snapToGrid, transformMode, clipboard,
+  canUndo, canRedo, onUndo, onRedo,
+  onToggleSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
+  onDeleteSelected, onCopy, onPaste, onDuplicate,
+  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera
+}: SidebarProps) {
+  const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
+  const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
+  const [propsCollapsed, setPropsCollapsed] = useState(false);
+
+  const groupedShapes = new Map<string, ShapeData[]>();
+  const ungroupedShapes: ShapeData[] = [];
+  shapes.forEach(shape => {
+    if (shape.groupId) {
+      const list = groupedShapes.get(shape.groupId) || [];
+      list.push(shape);
+      groupedShapes.set(shape.groupId, list);
+    } else {
+      ungroupedShapes.push(shape);
+    }
+  });
+
+  const startGroupRename = (group: GroupData) => {
+    setEditingGroupId(group.id);
+    setEditingGroupName(group.name);
+  };
+  const commitGroupRename = () => {
+    if (editingGroupId && editingGroupName.trim()) onRenameGroup(editingGroupId, editingGroupName.trim());
+    setEditingGroupId(null);
+  };
+
+  return (
+    <div className="w-80 h-full bg-[#141414] text-[#E4E3E0] border-r border-[#E4E3E0]/20 flex flex-col overflow-hidden font-mono text-xs">
+      <div className="p-6 border-bottom border-[#E4E3E0]/20">
+        {/* Header with undo/redo */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-lg font-bold tracking-tighter uppercase italic">3D_STUDIO_v1.5</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="w-8 h-8 rounded-full border border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-[#E4E3E0] hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className="w-8 h-8 rounded-full border border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-[#E4E3E0] hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo2 size={14} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[10px] uppercase opacity-50 tracking-widest">Library_Primitives</div>
+          <button 
+            onClick={onToggleSnap}
+            className={`flex items-center gap-2 px-2 py-1 border rounded transition-colors ${
+              snapToGrid ? 'bg-green-500/20 border-green-500 text-green-400' : 'border-[#E4E3E0]/20 opacity-50'
+            }`}
+          >
+            <Grid size={12} />
+            <span>SNAP</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-5 gap-2 mb-4 max-h-40 overflow-y-auto pr-2">
+          {ALL_SHAPES.map((type) => (
+            <button
+              key={type}
+              onClick={() => onAdd(type)}
+              className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-[#E4E3E0] hover:text-[#141414] transition-colors rounded"
+              title={`Add ${type}`}
+            >
+              {SHAPE_ICONS[type]}
+            </button>
+          ))}
+        </div>
+
+        {/* Action toolbar */}
+        <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Actions</div>
+        <div className="grid grid-cols-5 gap-1.5 mb-4">
+          <button onClick={onCopy} disabled={selectedIds.size === 0}
+            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            title="Copy (Ctrl+C)">
+            <Copy size={14} /><span className="text-[8px] mt-0.5">COPY</span>
+          </button>
+          <button onClick={onPaste} disabled={!clipboard}
+            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            title="Paste (Ctrl+V)">
+            <Clipboard size={14} /><span className="text-[8px] mt-0.5">PASTE</span>
+          </button>
+          <button onClick={onDuplicate} disabled={selectedIds.size === 0}
+            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            title="Duplicate (Ctrl+D)">
+            <Scissors size={14} /><span className="text-[8px] mt-0.5">DUP</span>
+          </button>
+          <button onClick={onCreateGroup} disabled={selectedIds.size < 2}
+            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-amber-500/20 hover:border-amber-500/50 hover:text-amber-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            title="Create Group (Ctrl+G)">
+            <FolderPlus size={14} /><span className="text-[8px] mt-0.5">GROUP</span>
+          </button>
+          <button onClick={onResetCamera}
+            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400 transition-colors rounded"
+            title="Reset Camera (H)">
+            <Home size={14} /><span className="text-[8px] mt-0.5">HOME</span>
+          </button>
+        </div>
+
+        {/* Selection info */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-[10px] mb-4">
+            <MousePointer size={12} />
+            <span>{selectedIds.size} selected</span>
+            <div className="flex-1" />
+            <button onClick={onSelectAll} className="hover:text-white px-1">ALL</button>
+            <span className="opacity-30">|</span>
+            <button onClick={() => onSelect(null)} className="hover:text-white px-1">NONE</button>
+            <span className="opacity-30">|</span>
+            <button onClick={onDeleteSelected} className="hover:text-red-400 px-1">DEL</button>
+          </div>
+        )}
+
+        <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Tool_Mode</div>
+        <div className="grid grid-cols-4 gap-1.5">
+          <button onClick={() => onChangeTransformMode('select')}
+            className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
+              transformMode === 'select' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+            }`} title="Select Tool (Q)">
+            <MousePointer size={14} /><span>SEL</span>
+          </button>
+          <button onClick={() => onChangeTransformMode('translate')}
+            className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
+              transformMode === 'translate' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+            }`} title="Move (G)">
+            <Move size={14} /><span>MOV</span>
+          </button>
+          <button onClick={() => onChangeTransformMode('rotate')}
+            className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
+              transformMode === 'rotate' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+            }`} title="Rotate (R)">
+            <RotateCw size={14} /><span>ROT</span>
+          </button>
+          <button onClick={() => onChangeTransformMode('scale')}
+            className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
+              transformMode === 'scale' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+            }`} title="Scale (S)">
+            <Maximize size={14} /><span>SCL</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Scene_Hierarchy</div>
+        
+        {/* Groups */}
+        {groups.map(group => {
+          const groupShapes = groupedShapes.get(group.id) || [];
+          const allGroupSelected = groupShapes.length > 0 && groupShapes.every(s => selectedIds.has(s.id));
+          const someGroupSelected = groupShapes.some(s => selectedIds.has(s.id));
+          return (
+            <div key={group.id} className="border border-amber-500/20 rounded overflow-hidden">
+              <div className={`flex items-center justify-between p-2 cursor-pointer transition-all ${
+                  allGroupSelected ? 'bg-amber-500/20 text-amber-300' : someGroupSelected ? 'bg-amber-500/10 text-amber-400/70' : 'hover:bg-[#1e1e1e]'
+                }`} onClick={() => onSelectGroup(group.id)}>
+                <div className="flex items-center gap-2">
+                  <button onClick={(e) => { e.stopPropagation(); onToggleGroupCollapse(group.id); }} className="opacity-50 hover:opacity-100">
+                    {group.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  <Layers size={14} className="text-amber-500" />
+                  {editingGroupId === group.id ? (
+                    <input autoFocus value={editingGroupName} onChange={e => setEditingGroupName(e.target.value)}
+                      onBlur={commitGroupRename} onKeyDown={e => { if (e.key === 'Enter') commitGroupRename(); }}
+                      onClick={e => e.stopPropagation()}
+                      className="bg-transparent border-b border-amber-500 outline-none text-xs w-24 uppercase" />
+                  ) : (
+                    <span className="uppercase text-[10px]" onDoubleClick={(e) => { e.stopPropagation(); startGroupRename(group); }}>
+                      {group.name}
+                    </span>
+                  )}
+                  <span className="text-[9px] opacity-40">({groupShapes.length})</span>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); onUngroup(group.id); }}
+                  className="opacity-40 hover:opacity-100 hover:text-red-400 transition-opacity" title="Ungroup">
+                  <Ungroup size={13} />
+                </button>
+              </div>
+              <AnimatePresence>
+                {!group.collapsed && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    {groupShapes.map(shape => (
+                      <div key={shape.id} onClick={(e) => onSelect(shape.id, e.shiftKey)}
+                        className={`flex items-center justify-between p-2 pl-8 border-t border-[#E4E3E0]/5 cursor-pointer transition-all ${
+                          selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414]' : 'hover:bg-[#1e1e1e]'
+                        }`}>
+                        <div className="flex items-center gap-2">
+                          {SHAPE_ICONS[shape.type]}
+                          <span className="uppercase text-[10px]">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}</span>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
+                          className="opacity-50 hover:opacity-100 hover:text-red-500 transition-opacity">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+
+        {/* Ungrouped shapes */}
+        {ungroupedShapes.map((shape) => (
+          <div key={shape.id} onClick={(e) => onSelect(shape.id, e.shiftKey)}
+            className={`flex items-center justify-between p-3 border cursor-pointer transition-all ${
+              selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/10 hover:border-[#E4E3E0]/40'
+            }`}>
+            <div className="flex items-center gap-3">
+              {SHAPE_ICONS[shape.type]}
+              <span className="uppercase">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}</span>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
+              className="opacity-50 hover:opacity-100 hover:text-red-500 transition-opacity">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        {shapes.length === 0 && (
+          <div className="text-center py-10 opacity-30 italic">No entities detected.</div>
+        )}
+      </div>
+
+      {/* ─── Collapsible Properties Panel ─── */}
+      <AnimatePresence>
+        {selectedShape && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="border-t border-[#E4E3E0]/20 bg-[#1a1a1a]"
+          >
+            {/* Header — always visible, acts as toggle */}
+            <div
+              className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-[#222] transition-colors select-none"
+              onClick={() => setPropsCollapsed(p => !p)}
+            >
+              <div className="flex items-center gap-2 text-[10px] uppercase opacity-60 tracking-widest">
+                {propsCollapsed ? <ChevronsUp size={12} /> : <ChevronsDown size={12} />}
+                <span>Entity_Properties</span>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); onSelect(null); }}
+                className="text-[10px] uppercase opacity-50 hover:opacity-100 tracking-widest">CLOSE</button>
+            </div>
+
+            {/* Content — collapses */}
+            <AnimatePresence>
+              {!propsCollapsed && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-6 pb-6 space-y-5">
+                    {/* Text Content */}
+                    {selectedShape.type === 'text' && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2 opacity-70"><Type size={12} /><span>TEXT_CONTENT</span></div>
+                        <input type="text" value={selectedShape.text || ''}
+                          onChange={(e) => onUpdate(selectedShape.id, { text: e.target.value })}
+                          className="w-full bg-transparent border border-[#E4E3E0]/20 p-2 focus:border-[#E4E3E0] outline-none" />
+                      </div>
+                    )}
+
+                    {/* Position */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><Move size={12} /><span>POSITION_XYZ</span></div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([0, 1, 2] as const).map((i) => (
+                          <input key={i} type="number" step="0.1" value={selectedShape.position[i]}
+                            onChange={(e) => {
+                              const p = [...selectedShape.position] as [number,number,number];
+                              p[i] = parseFloat(e.target.value) || 0;
+                              onUpdate(selectedShape.id, { position: p });
+                            }}
+                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Rotation */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><RotateCw size={12} /><span>ROTATION_XYZ</span></div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([0, 1, 2] as const).map((i) => (
+                          <input key={i} type="number" step="0.1" value={selectedShape.rotation[i]}
+                            onChange={(e) => {
+                              const r = [...selectedShape.rotation] as [number,number,number];
+                              r[i] = parseFloat(e.target.value) || 0;
+                              onUpdate(selectedShape.id, { rotation: r });
+                            }}
+                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Scale */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><Maximize size={12} /><span>SCALE_XYZ</span></div>
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        {([0, 1, 2] as const).map((i) => (
+                          <input key={i} type="number" step="0.1" value={selectedShape.scale[i]}
+                            onChange={(e) => {
+                              const s = [...selectedShape.scale] as [number,number,number];
+                              s[i] = parseFloat(e.target.value) || 0.1;
+                              onUpdate(selectedShape.id, { scale: s });
+                            }}
+                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => onUpdate(selectedShape.id, { scale: [selectedShape.scale[0]*0.5, selectedShape.scale[1]*0.5, selectedShape.scale[2]*0.5] })}
+                          className="flex-1 border border-[#E4E3E0]/20 p-1 hover:bg-[#E4E3E0] hover:text-[#141414] rounded transition-colors">
+                          -50% SIZE
+                        </button>
+                        <button onClick={() => onUpdate(selectedShape.id, { scale: [selectedShape.scale[0]*2, selectedShape.scale[1]*2, selectedShape.scale[2]*2] })}
+                          className="flex-1 border border-[#E4E3E0]/20 p-1 hover:bg-[#E4E3E0] hover:text-[#141414] rounded transition-colors">
+                          +100% SIZE
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Color */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><Palette size={12} /><span>COLOR_HEX</span></div>
+                      <div className="flex gap-2">
+                        <input type="color" value={selectedShape.color}
+                          onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
+                          className="w-10 h-8 bg-transparent border border-[#E4E3E0]/20 cursor-pointer" />
+                        <input type="text" value={selectedShape.color}
+                          onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
+                          className="flex-1 bg-transparent border border-[#E4E3E0]/20 p-1 px-2 focus:border-[#E4E3E0] outline-none uppercase" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

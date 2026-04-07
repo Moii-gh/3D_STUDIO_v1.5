@@ -1,0 +1,20 @@
+services:
+  # Using a Web Service (Node.js) because 'express' is in dependencies
+  - type: web
+    name: 3d-studio
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+    # Add a Health Check Path if needed
+    healthCheckPath: /
+    
+  # Alternative: Static Site (uncomment to use)
+  # - type: static
+  #   name: 3d-studio-static
+  #   env: static
+  #   buildCommand: npm install && npm run build
+  #   publishPath: dist

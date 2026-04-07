@@ -1,0 +1,5 @@
+{
+  "name": "3D Shape Studio",
+  "description": "A real-time 3D playground to place, rotate, and manipulate geometric shapes.",
+  "requestFramePermissions": []
+}
