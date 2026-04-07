@@ -102,7 +102,10 @@ export default function Sidebar({
       <div className="p-6 border-bottom border-[#E4E3E0]/20">
         {/* Header with undo/redo */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-bold tracking-tighter uppercase italic">3D_STUDIO_v1.5</h1>
+          <div className="flex items-center gap-3">
+            <img src="/favicon.png" className="w-8 h-8 object-contain" alt="Logo" />
+            <h1 className="text-lg font-bold tracking-tighter uppercase italic">3D_STUDIO_v1.5</h1>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onUndo}
