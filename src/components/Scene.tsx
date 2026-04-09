@@ -5,7 +5,7 @@ import { ShapeData } from '../types';
 import { SnapGuide } from '../smartSnap';
 import * as THREE from 'three';
 import { TransformMode } from '../App';
-import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings } from 'lucide-react';
+import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon } from 'lucide-react';
 
 interface SceneProps {
   shapes: ShapeData[];
@@ -18,6 +18,8 @@ interface SceneProps {
   historyLength: number;
   historyIndex: number;
   isMobile: boolean;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
   onSelect: (id: string | null, additive?: boolean) => void;
   onUpdate: (id: string, updates: Partial<ShapeData>) => void;
   onGroupTransform: (id: string, updates: Partial<ShapeData>) => void;
@@ -190,7 +192,7 @@ function FirstPersonController() {
 }
 
 // ═══ Main Scene ═══
-export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, onSelect, onUpdate, onGroupTransform, onMultiSelect, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
+export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, theme, onToggleTheme, onSelect, onUpdate, onGroupTransform, onMultiSelect, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
   const orbitRef = useRef<any>(null);
   const transformRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -328,7 +330,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
   } : null;
 
   return (
-    <div ref={containerRef} className="flex-1 h-full bg-[#0a0a0a] relative overflow-hidden"
+    <div ref={containerRef} className="flex-1 h-full bg-[#f4f4f5] dark:bg-[#0a0a0a] relative overflow-hidden"
       style={{ cursor: !isMobile && transformMode === 'select' ? 'crosshair' : 'default' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -414,7 +416,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow
           onClick={() => { if (!marqueeDidDrag.current) onSelect(null); }}>
           <planeGeometry args={[100, 100]} />
-          <meshStandardMaterial color="#0a0a0a" transparent opacity={0.5} />
+          <meshStandardMaterial color={theme === 'dark' ? '#0a0a0a' : '#d4d4d8'} transparent opacity={theme === 'dark' ? 0.5 : 0.6} />
         </mesh>
       </Canvas>
 
@@ -429,7 +431,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             <div className="flex items-center gap-2">
               {/* FPS Mode */}
               <button onClick={() => setIsFirstPerson(!isFirstPerson)}
-                className={`flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${isFirstPerson ? 'border-cyan-500 text-cyan-400' : 'border-[#E4E3E0]/10 text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414]'}`}
+                className={`flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${isFirstPerson ? 'border-cyan-500 text-cyan-400' : 'border-black/5 dark:border-[#E4E3E0]/10 text-gray-800 dark:text-[#E4E3E0] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414]'}`}
                 title="First Person Flying Mode (WASD + Mouse)">
                 {isFirstPerson ? <EyeOff size={12} /> : <Eye size={12} />}
                 <span>FPS</span>
@@ -438,19 +440,26 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
               {/* Settings Menu Button */}
               <div className="relative">
                 <button onClick={() => setShowSettings(!showSettings)}
-                  className={`flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${showSettings ? 'border-[#E4E3E0] text-[#E4E3E0]' : 'border-[#E4E3E0]/10 text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414]'}`}
+                  className={`flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-[#141414]/80 backdrop-blur border rounded font-mono text-[10px] uppercase tracking-widest transition-all active:scale-95 ${showSettings ? 'border-gray-800 dark:border-[#E4E3E0] text-gray-800 dark:text-[#E4E3E0]' : 'border-black/5 dark:border-[#E4E3E0]/10 text-gray-800 dark:text-[#E4E3E0] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414]'}`}
                   title="Настройки">
                   <Settings size={12} /><span>Настройки</span>
                 </button>
                 
                 {showSettings && (
-                  <div className="absolute top-full right-0 mt-2 bg-[#141414]/90 backdrop-blur-md border border-[#E4E3E0]/20 rounded p-2 min-w-[200px] shadow-2xl flex flex-col gap-2 z-50">
-                    <div className="text-[#E4E3E0]/50 text-[10px] uppercase tracking-widest mb-1 px-2">Параметры</div>
+                  <div className="absolute top-full right-0 mt-2 bg-white/90 dark:bg-[#141414]/90 backdrop-blur-md border border-black/10 dark:border-[#E4E3E0]/20 rounded p-2 min-w-[200px] shadow-2xl flex flex-col gap-2 z-50">
+                    <div className="text-gray-500 dark:text-[#E4E3E0]/50 text-[10px] uppercase tracking-widest mb-1 px-2">Параметры</div>
+                    <button
+                      onClick={onToggleTheme}
+                      className="w-full text-left px-3 py-2 rounded text-gray-800 dark:text-[#E4E3E0] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                    >
+                      {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+                      <span>{theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}</span>
+                    </button>
                     <a 
                       href="https://vk.com/moii.unlim" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="w-full text-left px-3 py-2 rounded text-[#E4E3E0] hover:bg-[#E4E3E0] hover:text-[#141414] font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 rounded text-gray-800 dark:text-[#E4E3E0] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
                     >
                        <span>Написать разработчику</span>
                     </a>
@@ -460,9 +469,9 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             </div>
 
             {/* History step navigator */}
-            <div className="flex items-center gap-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded px-3 py-1.5 font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest">
+            <div className="flex items-center gap-2 bg-white/80 dark:bg-[#141414]/80 backdrop-blur border border-black/5 dark:border-[#E4E3E0]/10 rounded px-3 py-1.5 font-mono text-[10px] text-gray-800 dark:text-[#E4E3E0] uppercase tracking-widest">
               <button onClick={onUndo} disabled={!canUndo}
-                className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-[#E4E3E0]/20 disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-90">
+                className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-[#E4E3E0]/20 disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-90">
                 <ChevronLeft size={14} />
               </button>
               <span className="min-w-[60px] text-center">
@@ -470,13 +479,13 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
                 <span className="opacity-40"> / {historyLength.toString().padStart(2, '0')}</span>
               </span>
               <button onClick={onRedo} disabled={!canRedo}
-                className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-[#E4E3E0]/20 disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-90">
+                className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-[#E4E3E0]/20 disabled:opacity-20 disabled:pointer-events-none transition-all active:scale-90">
                 <ChevronRight size={14} />
               </button>
             </div>
 
             {/* Stats */}
-            <div className="bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 p-4 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest pointer-events-none">
+            <div className="bg-white/80 dark:bg-[#141414]/80 backdrop-blur border border-black/5 dark:border-[#E4E3E0]/10 p-4 rounded font-mono text-[10px] text-gray-800 dark:text-[#E4E3E0] uppercase tracking-widest pointer-events-none">
               <div className="flex justify-between gap-8 mb-1"><span className="opacity-50">Entities</span><span>{shapes.length.toString().padStart(2, '0')}</span></div>
               <div className="flex justify-between gap-8 mb-1"><span className="opacity-50">Selected</span><span className={selectedIds.size > 0 ? 'text-cyan-400' : ''}>{selectedIds.size.toString().padStart(2, '0')}</span></div>
               <div className="flex justify-between gap-8"><span className="opacity-50">Status</span><span className="text-green-500">Online</span></div>
@@ -486,12 +495,12 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
           {/* Overlay UI — bottom right */}
           <div className="absolute bottom-6 right-6 flex items-center gap-2 z-10">
             <button onClick={onSave}
-              className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
+              className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-[#141414]/80 backdrop-blur border border-black/5 dark:border-[#E4E3E0]/10 rounded font-mono text-[10px] text-gray-800 dark:text-[#E4E3E0] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] transition-all active:scale-95"
               title="Save project (.3dstudio)">
               <Download size={12} /><span>Сохранить</span>
             </button>
             <button onClick={onLoad}
-              className="flex items-center gap-2 px-3 py-2 bg-[#141414]/80 backdrop-blur border border-[#E4E3E0]/10 rounded font-mono text-[10px] text-[#E4E3E0] uppercase tracking-widest hover:bg-[#E4E3E0] hover:text-[#141414] transition-all active:scale-95"
+              className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-[#141414]/80 backdrop-blur border border-black/5 dark:border-[#E4E3E0]/10 rounded font-mono text-[10px] text-gray-800 dark:text-[#E4E3E0] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] transition-all active:scale-95"
               title="Load project (.3dstudio)">
               <Upload size={12} /><span>Загрузить</span>
             </button>
@@ -501,7 +510,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
       {/* ═══ Mobile-only mini stats overlay ═══ */}
       {isMobile && (
-        <div className="absolute top-14 right-3 z-10 bg-[#141414]/60 backdrop-blur-sm border border-[#E4E3E0]/10 rounded-xl px-2.5 py-1.5 font-mono text-[9px] text-[#E4E3E0] uppercase tracking-widest pointer-events-none">
+        <div className="absolute top-14 right-3 z-10 bg-white/60 dark:bg-[#141414]/60 backdrop-blur-sm border border-black/5 dark:border-[#E4E3E0]/10 rounded-xl px-2.5 py-1.5 font-mono text-[9px] text-gray-800 dark:text-[#E4E3E0] uppercase tracking-widest pointer-events-none">
           <span className="opacity-40">OBJ </span>
           <span className="text-cyan-400">{shapes.length.toString().padStart(2, '0')}</span>
           {selectedIds.size > 0 && (

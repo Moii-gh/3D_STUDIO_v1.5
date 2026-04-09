@@ -5,6 +5,7 @@ import MobileToolbar from './components/MobileToolbar';
 import { ShapeData, ShapeType, GroupData } from './types';
 import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
 import { useIsMobile } from './hooks/useMobile';
+import { useTheme } from './hooks/useTheme';
 
 export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
 
@@ -48,6 +49,7 @@ function loadAutosave(): { shapes: ShapeData[], groups: GroupData[], history: Hi
 
 export default function App() {
   const isMobile = useIsMobile();
+  const { theme, toggleTheme } = useTheme();
 
   const [initialState] = useState(loadAutosave);
 
@@ -460,7 +462,7 @@ export default function App() {
   }, [isMobile, handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
 
   return (
-    <div className="flex h-screen w-screen bg-[#0a0a0a] overflow-hidden text-[#E4E3E0]">
+    <div className="flex h-screen w-screen bg-[#f4f4f5] dark:bg-[#0a0a0a] overflow-hidden text-gray-800 dark:text-[#E4E3E0]">
       {/* Desktop sidebar */}
       {!isMobile && (
         <Sidebar
@@ -492,6 +494,7 @@ export default function App() {
           historyLength={historyRef.current.length}
           historyIndex={historyIndexRef.current}
           isMobile={isMobile}
+          theme={theme} onToggleTheme={toggleTheme}
           onSelect={handleSelect} onUpdate={handleUpdateShape}
           onGroupTransform={handleGroupTransform} onMultiSelect={handleMultiSelect}
           onSave={handleSaveProject} onLoad={handleLoadProject}
@@ -506,6 +509,7 @@ export default function App() {
             shapes={shapes} groups={groups} selectedIds={selectedIds}
             snapToGrid={snapToGrid} smartSnap={smartSnapEnabled} transformMode={transformMode} clipboard={clipboard}
             canUndo={canUndo} canRedo={canRedo}
+            theme={theme} onToggleTheme={toggleTheme}
             onUndo={handleUndo} onRedo={handleRedo}
             onToggleSnap={() => setSnapToGrid(!snapToGrid)}
             onToggleSmartSnap={() => { setSmartSnapEnabled(!smartSnapEnabled); showToast(smartSnapEnabled ? 'Smart Snap OFF' : 'Smart Snap ON'); }}
@@ -525,7 +529,7 @@ export default function App() {
         {/* Toast */}
         {toast && (
           <div className={`absolute ${isMobile ? 'top-16' : 'top-6'} left-1/2 -translate-x-1/2 z-50 pointer-events-none`}>
-            <div className="bg-[#1a1a1a]/90 backdrop-blur-md border border-[#E4E3E0]/20 px-6 py-2.5 rounded-xl font-mono text-xs uppercase tracking-widest text-[#E4E3E0] shadow-xl"
+            <div className="bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-md border border-black/10 dark:border-[#E4E3E0]/20 px-6 py-2.5 rounded-xl font-mono text-xs uppercase tracking-widest text-gray-800 dark:text-[#E4E3E0] shadow-xl"
               style={{ animation: 'toastIn 0.25s ease-out' }}>
               {toast}
             </div>

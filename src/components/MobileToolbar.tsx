@@ -4,7 +4,8 @@ import {
   Pill, Diamond, Hexagon, Triangle, Globe, Command, CircleDashed, Square, Star,
   Heart, ArrowUp, Plus, MousePointer, Undo2, Redo2, Menu, X,
   Download, Upload, Home, Grid, Magnet, Copy, Clipboard,
-  Scissors, FolderPlus, Type, Layers, ChevronDown, ChevronRight, Ungroup, Palette
+  Scissors, FolderPlus, Type, Layers, ChevronDown, ChevronRight, Ungroup, Palette,
+  Sun, Moon, Settings
 } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { TransformMode } from '../App';
@@ -42,6 +43,8 @@ interface MobileToolbarProps {
   onResetCamera: () => void;
   onSave: () => void;
   onLoad: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
@@ -81,7 +84,7 @@ export default function MobileToolbar({
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
   onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera,
-  onSave, onLoad
+  onSave, onLoad, theme, onToggleTheme
 }: MobileToolbarProps) {
   const [activePanel, setActivePanel] = useState<MobilePanel>('none');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -149,38 +152,42 @@ export default function MobileToolbar({
           TOP BAR — Logo, Undo/Redo, Save/Load
           ═══════════════════════════════════════════════════════ */}
       <div className="absolute top-0 left-0 right-0 z-30 safe-area-top">
-        <div className="flex items-center justify-between px-3 py-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-[#E4E3E0]/10">
+        <div className="flex items-center justify-between px-3 py-2 bg-[#f4f4f5] dark:bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-black/5 dark:border-[#E4E3E0]/10">
           {/* Left: Logo */}
           <div className="flex items-center gap-2">
             <img src="/favicon.png" className="w-7 h-7 object-contain" alt="Logo" />
-            <span className="font-mono text-[10px] font-bold tracking-tighter uppercase italic text-[#E4E3E0]">3D_STUDIO</span>
+            <span className="font-mono text-[10px] font-bold tracking-tighter uppercase italic text-gray-800 dark:text-[#E4E3E0]">3D_STUDIO</span>
           </div>
 
           {/* Center: Undo/Redo */}
           <div className="flex items-center gap-1">
             <button onClick={onUndo} disabled={!canUndo}
-              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all bg-[#1a1a1a]/80 border border-[#E4E3E0]/10">
-              <Undo2 size={16} className="text-[#E4E3E0]" />
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              <Undo2 size={16} className="text-gray-800 dark:text-[#E4E3E0]" />
             </button>
             <button onClick={onRedo} disabled={!canRedo}
-              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all bg-[#1a1a1a]/80 border border-[#E4E3E0]/10">
-              <Redo2 size={16} className="text-[#E4E3E0]" />
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              <Redo2 size={16} className="text-gray-800 dark:text-[#E4E3E0]" />
             </button>
           </div>
 
           {/* Right: Save/Load/Home */}
           <div className="flex items-center gap-1">
             <button onClick={onSave}
-              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-[#1a1a1a]/80 border border-[#E4E3E0]/10">
-              <Download size={16} className="text-[#E4E3E0]" />
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              <Download size={16} className="text-gray-800 dark:text-[#E4E3E0]" />
             </button>
             <button onClick={onLoad}
-              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-[#1a1a1a]/80 border border-[#E4E3E0]/10">
-              <Upload size={16} className="text-[#E4E3E0]" />
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              <Upload size={16} className="text-gray-800 dark:text-[#E4E3E0]" />
             </button>
             <button onClick={onResetCamera}
-              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-[#1a1a1a]/80 border border-[#E4E3E0]/10">
-              <Home size={16} className="text-[#E4E3E0]" />
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              <Home size={16} className="text-gray-800 dark:text-[#E4E3E0]" />
+            </button>
+            <button onClick={onToggleTheme}
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all bg-gray-50 dark:bg-[#1a1a1a]/80 border border-black/5 dark:border-[#E4E3E0]/10">
+              {theme === 'dark' ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-indigo-500" />}
             </button>
           </div>
         </div>
@@ -222,7 +229,7 @@ export default function MobileToolbar({
                     <Trash2 size={14} />
                   </button>
                   <button onClick={() => onSelect(null)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 text-[#E4E3E0]/50">
+                    className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 text-gray-500 dark:text-[#E4E3E0]/50">
                     <X size={14} />
                   </button>
                 </div>
@@ -249,8 +256,8 @@ export default function MobileToolbar({
               transformMode === mode
                 ? color === 'cyan'
                   ? 'bg-cyan-500/30 border-2 border-cyan-400 text-cyan-400 shadow-lg shadow-cyan-500/20'
-                  : 'bg-[#E4E3E0] text-[#141414] border-2 border-[#E4E3E0] shadow-lg'
-                : 'bg-[#141414]/70 border border-[#E4E3E0]/15 text-[#E4E3E0]/70'
+                  : 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-2 border-gray-800 dark:border-[#E4E3E0] shadow-lg'
+                : 'bg-white dark:bg-[#141414]/70 border border-gray-800 dark:border-[#E4E3E0]/15 text-gray-800 dark:text-[#E4E3E0]/70'
             }`}
           >
             {icon}
@@ -261,13 +268,13 @@ export default function MobileToolbar({
         <div className="h-1" />
         <button onClick={onToggleSmartSnap}
           className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-90 backdrop-blur-md ${
-            smartSnap ? 'bg-purple-500/30 border-2 border-purple-400 text-purple-400' : 'bg-[#141414]/70 border border-[#E4E3E0]/15 text-[#E4E3E0]/40'
+            smartSnap ? 'bg-purple-500/30 border-2 border-purple-400 text-purple-400' : 'bg-white dark:bg-[#141414]/70 border border-gray-800 dark:border-[#E4E3E0]/15 text-gray-800 dark:text-[#E4E3E0]/40'
           }`}>
           <Magnet size={16} />
         </button>
         <button onClick={onToggleSnap}
           className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-90 backdrop-blur-md ${
-            snapToGrid ? 'bg-green-500/30 border-2 border-green-400 text-green-400' : 'bg-[#141414]/70 border border-[#E4E3E0]/15 text-[#E4E3E0]/40'
+            snapToGrid ? 'bg-green-500/30 border-2 border-green-400 text-green-400' : 'bg-white dark:bg-[#141414]/70 border border-gray-800 dark:border-[#E4E3E0]/15 text-gray-800 dark:text-[#E4E3E0]/40'
           }`}>
           <Grid size={16} />
         </button>
@@ -277,12 +284,12 @@ export default function MobileToolbar({
           BOTTOM BAR — Main Navigation
           ═══════════════════════════════════════════════════════ */}
       <div className="absolute bottom-0 left-0 right-0 z-30 safe-area-bottom">
-        <div className="flex items-stretch justify-around bg-[#0a0a0a]/90 backdrop-blur-xl border-t border-[#E4E3E0]/10 px-2 py-1">
+        <div className="flex items-stretch justify-around bg-[#f4f4f5] dark:bg-[#0a0a0a]/90 backdrop-blur-xl border-t border-black/5 dark:border-[#E4E3E0]/10 px-2 py-1">
           {/* Add Shapes */}
           <button
             onClick={() => togglePanel('shapes')}
             className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl transition-all active:scale-95 min-w-[72px] ${
-              activePanel === 'shapes' ? 'text-cyan-400 bg-cyan-500/10' : 'text-[#E4E3E0]/60'
+              activePanel === 'shapes' ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-800 dark:text-[#E4E3E0]/60'
             }`}
           >
             <Plus size={22} />
@@ -293,7 +300,7 @@ export default function MobileToolbar({
           <button
             onClick={() => togglePanel('hierarchy')}
             className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl transition-all active:scale-95 min-w-[72px] ${
-              activePanel === 'hierarchy' ? 'text-amber-400 bg-amber-500/10' : 'text-[#E4E3E0]/60'
+              activePanel === 'hierarchy' ? 'text-amber-400 bg-amber-500/10' : 'text-gray-800 dark:text-[#E4E3E0]/60'
             }`}
           >
             <Layers size={22} />
@@ -305,7 +312,7 @@ export default function MobileToolbar({
             onClick={() => togglePanel('properties')}
             disabled={!selectedShape}
             className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-20 min-w-[72px] ${
-              activePanel === 'properties' ? 'text-purple-400 bg-purple-500/10' : 'text-[#E4E3E0]/60'
+              activePanel === 'properties' ? 'text-purple-400 bg-purple-500/10' : 'text-gray-800 dark:text-[#E4E3E0]/60'
             }`}
           >
             <Palette size={22} />
@@ -337,7 +344,7 @@ export default function MobileToolbar({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="absolute bottom-0 left-0 right-0 z-28 bg-[#141414]/95 backdrop-blur-2xl border-t border-[#E4E3E0]/15 rounded-t-3xl overflow-hidden"
+              className="absolute bottom-0 left-0 right-0 z-28 bg-white dark:bg-[#141414]/95 backdrop-blur-2xl border-t border-gray-800 dark:border-[#E4E3E0]/15 rounded-t-3xl overflow-hidden"
               style={{ zIndex: 28, maxHeight: '65vh' }}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
@@ -357,7 +364,7 @@ export default function MobileToolbar({
                       <button
                         key={type}
                         onClick={() => { onAdd(type); setActivePanel('none'); }}
-                        className="flex flex-col items-center justify-center p-3 border border-[#E4E3E0]/15 rounded-xl active:scale-90 active:bg-cyan-500/20 active:border-cyan-500 transition-all"
+                        className="flex flex-col items-center justify-center p-3 border border-gray-800 dark:border-[#E4E3E0]/15 rounded-xl active:scale-90 active:bg-cyan-500/20 active:border-cyan-500 transition-all"
                       >
                         {SHAPE_ICONS[type]}
                         <span className="text-[7px] font-mono uppercase mt-1.5 opacity-50">{type}</span>
@@ -420,8 +427,8 @@ export default function MobileToolbar({
                               {groupShapes.map(shape => (
                                 <div key={shape.id}
                                   onClick={() => { onSelect(shape.id); setActivePanel('none'); }}
-                                  className={`flex items-center justify-between p-3 pl-10 border-t border-[#E4E3E0]/5 transition-all ${
-                                    selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414]' : ''
+                                  className={`flex items-center justify-between p-3 pl-10 border-t border-black/5 dark:border-[#E4E3E0]/5 transition-all ${
+                                    selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414]' : ''
                                   }`}>
                                   <div className="flex items-center gap-2">
                                     {SHAPE_ICONS[shape.type]}
@@ -447,7 +454,7 @@ export default function MobileToolbar({
                     <div key={shape.id}
                       onClick={() => { onSelect(shape.id); setActivePanel('none'); }}
                       className={`flex items-center justify-between p-3 border rounded-xl mb-1.5 transition-all ${
-                        selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/10'
+                        selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-gray-800 dark:border-[#E4E3E0]' : 'border-black/5 dark:border-[#E4E3E0]/10'
                       }`}>
                       <div className="flex items-center gap-3">
                         {SHAPE_ICONS[shape.type]}
@@ -483,7 +490,7 @@ export default function MobileToolbar({
                       </div>
                       <input type="text" value={selectedShape.text || ''}
                         onChange={(e) => onUpdate(selectedShape.id, { text: e.target.value })}
-                        className="w-full bg-[#1e1e1e] border border-[#E4E3E0]/20 p-3 rounded-xl focus:border-[#E4E3E0] outline-none font-mono text-sm" />
+                        className="w-full bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 rounded-xl focus:border-gray-800 dark:border-[#E4E3E0] outline-none font-mono text-sm" />
                     </div>
                   )}
 
@@ -502,7 +509,7 @@ export default function MobileToolbar({
                               p[i] = parseFloat(e.target.value) || 0;
                               onUpdate(selectedShape.id, { position: p });
                             }}
-                            className="w-full bg-[#1e1e1e] border border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-[#E4E3E0] outline-none font-mono text-sm" />
+                            className="w-full bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none font-mono text-sm" />
                         </div>
                       ))}
                     </div>
@@ -523,7 +530,7 @@ export default function MobileToolbar({
                               r[i] = parseFloat(e.target.value) || 0;
                               onUpdate(selectedShape.id, { rotation: r });
                             }}
-                            className="w-full bg-[#1e1e1e] border border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-[#E4E3E0] outline-none font-mono text-sm" />
+                            className="w-full bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none font-mono text-sm" />
                         </div>
                       ))}
                     </div>
@@ -544,7 +551,7 @@ export default function MobileToolbar({
                               s[i] = parseFloat(e.target.value) || 0.1;
                               onUpdate(selectedShape.id, { scale: s });
                             }}
-                            className="w-full bg-[#1e1e1e] border border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-[#E4E3E0] outline-none font-mono text-sm" />
+                            className="w-full bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 pt-4 rounded-xl text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none font-mono text-sm" />
                         </div>
                       ))}
                     </div>
@@ -552,13 +559,13 @@ export default function MobileToolbar({
                       <button onClick={() => onUpdate(selectedShape.id, {
                         scale: [selectedShape.scale[0]*0.5, selectedShape.scale[1]*0.5, selectedShape.scale[2]*0.5]
                       })}
-                        className="flex-1 border border-[#E4E3E0]/20 p-2.5 rounded-xl active:bg-[#E4E3E0] active:text-[#141414] font-mono text-xs transition-all">
+                        className="flex-1 border border-black/10 dark:border-[#E4E3E0]/20 p-2.5 rounded-xl active:bg-[#E4E3E0] active:text-gray-100 dark:text-[#141414] font-mono text-xs transition-all">
                         -50%
                       </button>
                       <button onClick={() => onUpdate(selectedShape.id, {
                         scale: [selectedShape.scale[0]*2, selectedShape.scale[1]*2, selectedShape.scale[2]*2]
                       })}
-                        className="flex-1 border border-[#E4E3E0]/20 p-2.5 rounded-xl active:bg-[#E4E3E0] active:text-[#141414] font-mono text-xs transition-all">
+                        className="flex-1 border border-black/10 dark:border-[#E4E3E0]/20 p-2.5 rounded-xl active:bg-[#E4E3E0] active:text-gray-100 dark:text-[#141414] font-mono text-xs transition-all">
                         +100%
                       </button>
                     </div>
@@ -572,10 +579,10 @@ export default function MobileToolbar({
                     <div className="flex gap-2">
                       <input type="color" value={selectedShape.color}
                         onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
-                        className="w-14 h-12 bg-transparent border border-[#E4E3E0]/20 cursor-pointer rounded-xl" />
+                        className="w-14 h-12 bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 cursor-pointer rounded-xl" />
                       <input type="text" value={selectedShape.color}
                         onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
-                        className="flex-1 bg-[#1e1e1e] border border-[#E4E3E0]/20 p-3 rounded-xl focus:border-[#E4E3E0] outline-none uppercase font-mono text-sm" />
+                        className="flex-1 bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 rounded-xl focus:border-gray-800 dark:border-[#E4E3E0] outline-none uppercase font-mono text-sm" />
                     </div>
                   </div>
 

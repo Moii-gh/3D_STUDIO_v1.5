@@ -100,8 +100,8 @@ export default function Sidebar({
   };
 
   return (
-    <div className="w-80 h-full bg-[#141414] text-[#E4E3E0] border-r border-[#E4E3E0]/20 flex flex-col overflow-hidden font-mono text-xs">
-      <div className="p-6 border-bottom border-[#E4E3E0]/20">
+    <div className="w-80 shrink-0 h-full bg-white dark:bg-[#141414] text-gray-800 dark:text-[#E4E3E0] border-r border-black/10 dark:border-[#E4E3E0]/20 flex flex-col overflow-hidden font-mono text-xs">
+      <div className="p-6 border-bottom border-black/10 dark:border-[#E4E3E0]/20">
         {/* Header with undo/redo */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function Sidebar({
             <button
               onClick={onUndo}
               disabled={!canUndo}
-              className="w-8 h-8 rounded-full border border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-[#E4E3E0] hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
+              className="w-8 h-8 rounded-full border border-black/10 dark:border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 size={14} />
@@ -120,7 +120,7 @@ export default function Sidebar({
             <button
               onClick={onRedo}
               disabled={!canRedo}
-              className="w-8 h-8 rounded-full border border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-[#E4E3E0] hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
+              className="w-8 h-8 rounded-full border border-black/10 dark:border-[#E4E3E0]/20 flex items-center justify-center transition-all hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] disabled:opacity-20 disabled:pointer-events-none active:scale-90"
               title="Redo (Ctrl+Shift+Z)"
             >
               <Redo2 size={14} />
@@ -134,7 +134,7 @@ export default function Sidebar({
             <button 
               onClick={onToggleSmartSnap}
               className={`flex items-center gap-1.5 px-2 py-1 border rounded transition-colors ${
-                smartSnap ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'border-[#E4E3E0]/20 opacity-50'
+                smartSnap ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'border-black/10 dark:border-[#E4E3E0]/20 opacity-50'
               }`}
               title="Smart Snap: intelligent surface/edge snapping"
             >
@@ -144,7 +144,7 @@ export default function Sidebar({
             <button 
               onClick={onToggleSnap}
               className={`flex items-center gap-1.5 px-2 py-1 border rounded transition-colors ${
-                snapToGrid ? 'bg-green-500/20 border-green-500 text-green-400' : 'border-[#E4E3E0]/20 opacity-50'
+                snapToGrid ? 'bg-green-500/20 border-green-500 text-green-400' : 'border-black/10 dark:border-[#E4E3E0]/20 opacity-50'
               }`}
               title="Grid Snap: snap to 0.5 grid"
             >
@@ -159,7 +159,7 @@ export default function Sidebar({
             <button
               key={type}
               onClick={() => onAdd(type)}
-              className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-[#E4E3E0] hover:text-[#141414] transition-colors rounded"
+              className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] transition-colors rounded"
               title={`Add ${type}`}
             >
               {SHAPE_ICONS[type]}
@@ -171,27 +171,27 @@ export default function Sidebar({
         <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Actions</div>
         <div className="grid grid-cols-5 gap-1.5 mb-4">
           <button onClick={onCopy} disabled={selectedIds.size === 0}
-            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
             title="Copy (Ctrl+C)">
             <Copy size={14} /><span className="text-[8px] mt-0.5">COPY</span>
           </button>
           <button onClick={onPaste} disabled={!clipboard}
-            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
             title="Paste (Ctrl+V)">
             <Clipboard size={14} /><span className="text-[8px] mt-0.5">PASTE</span>
           </button>
           <button onClick={onDuplicate} disabled={selectedIds.size === 0}
-            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
             title="Duplicate (Ctrl+D)">
             <Scissors size={14} /><span className="text-[8px] mt-0.5">DUP</span>
           </button>
           <button onClick={onCreateGroup} disabled={selectedIds.size < 2}
-            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-amber-500/20 hover:border-amber-500/50 hover:text-amber-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
+            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-amber-500/20 hover:border-amber-500/50 hover:text-amber-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
             title="Create Group (Ctrl+G)">
             <FolderPlus size={14} /><span className="text-[8px] mt-0.5">GROUP</span>
           </button>
           <button onClick={onResetCamera}
-            className="flex flex-col items-center justify-center p-2 border border-[#E4E3E0]/20 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400 transition-colors rounded"
+            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400 transition-colors rounded"
             title="Reset Camera (H)">
             <Home size={14} /><span className="text-[8px] mt-0.5">HOME</span>
           </button>
@@ -215,25 +215,25 @@ export default function Sidebar({
         <div className="grid grid-cols-4 gap-1.5">
           <button onClick={() => onChangeTransformMode('select')}
             className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
-              transformMode === 'select' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+              transformMode === 'select' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-black/20 dark:hover:border-[#E4E3E0]/40'
             }`} title="Select Tool (Q)">
             <MousePointer size={14} /><span>SEL</span>
           </button>
           <button onClick={() => onChangeTransformMode('translate')}
             className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
-              transformMode === 'translate' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+              transformMode === 'translate' ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-gray-800 dark:border-[#E4E3E0]' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-black/20 dark:hover:border-[#E4E3E0]/40'
             }`} title="Move (G)">
             <Move size={14} /><span>MOV</span>
           </button>
           <button onClick={() => onChangeTransformMode('rotate')}
             className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
-              transformMode === 'rotate' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+              transformMode === 'rotate' ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-gray-800 dark:border-[#E4E3E0]' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-black/20 dark:hover:border-[#E4E3E0]/40'
             }`} title="Rotate (R)">
             <RotateCw size={14} /><span>ROT</span>
           </button>
           <button onClick={() => onChangeTransformMode('scale')}
             className={`flex items-center justify-center gap-1.5 p-2 border rounded transition-colors ${
-              transformMode === 'scale' ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/20 hover:border-[#E4E3E0]/40'
+              transformMode === 'scale' ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-gray-800 dark:border-[#E4E3E0]' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-black/20 dark:hover:border-[#E4E3E0]/40'
             }`} title="Scale (S)">
             <Maximize size={14} /><span>SCL</span>
           </button>
@@ -251,7 +251,7 @@ export default function Sidebar({
           return (
             <div key={group.id} className="border border-amber-500/20 rounded overflow-hidden">
               <div className={`flex items-center justify-between p-2 cursor-pointer transition-all ${
-                  allGroupSelected ? 'bg-amber-500/20 text-amber-300' : someGroupSelected ? 'bg-amber-500/10 text-amber-400/70' : 'hover:bg-[#1e1e1e]'
+                  allGroupSelected ? 'bg-amber-500/20 text-amber-300' : someGroupSelected ? 'bg-amber-500/10 text-amber-400/70' : 'hover:bg-gray-100 dark:bg-[#1e1e1e]'
                 }`} onClick={() => onSelectGroup(group.id)}>
                 <div className="flex items-center gap-2">
                   <button onClick={(e) => { e.stopPropagation(); onToggleGroupCollapse(group.id); }} className="opacity-50 hover:opacity-100">
@@ -281,8 +281,8 @@ export default function Sidebar({
                     exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     {groupShapes.map(shape => (
                       <div key={shape.id} onClick={(e) => onSelect(shape.id, e.shiftKey)}
-                        className={`flex items-center justify-between p-2 pl-8 border-t border-[#E4E3E0]/5 cursor-pointer transition-all ${
-                          selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414]' : 'hover:bg-[#1e1e1e]'
+                        className={`flex items-center justify-between p-2 pl-8 border-t border-black/5 dark:border-[#E4E3E0]/5 cursor-pointer transition-all ${
+                          selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414]' : 'hover:bg-gray-100 dark:bg-[#1e1e1e]'
                         }`}>
                         <div className="flex items-center gap-2">
                           {SHAPE_ICONS[shape.type]}
@@ -305,7 +305,7 @@ export default function Sidebar({
         {ungroupedShapes.map((shape) => (
           <div key={shape.id} onClick={(e) => onSelect(shape.id, e.shiftKey)}
             className={`flex items-center justify-between p-3 border cursor-pointer transition-all ${
-              selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-[#141414] border-[#E4E3E0]' : 'border-[#E4E3E0]/10 hover:border-[#E4E3E0]/40'
+              selectedIds.has(shape.id) ? 'bg-[#E4E3E0] text-gray-100 dark:text-[#141414] border-gray-800 dark:border-[#E4E3E0]' : 'border-black/5 dark:border-[#E4E3E0]/10 hover:border-black/20 dark:hover:border-[#E4E3E0]/40'
             }`}>
             <div className="flex items-center gap-3">
               {SHAPE_ICONS[shape.type]}
@@ -329,11 +329,11 @@ export default function Sidebar({
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="border-t border-[#E4E3E0]/20 bg-[#1a1a1a]"
+            className="border-t border-black/10 dark:border-[#E4E3E0]/20 bg-gray-50 dark:bg-[#1a1a1a]"
           >
             {/* Header — always visible, acts as toggle */}
             <div
-              className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-[#222] transition-colors select-none"
+              className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-gray-200 dark:bg-[#222] transition-colors select-none"
               onClick={() => setPropsCollapsed(p => !p)}
             >
               <div className="flex items-center gap-2 text-[10px] uppercase opacity-60 tracking-widest">
@@ -361,7 +361,7 @@ export default function Sidebar({
                         <div className="flex items-center gap-2 mb-2 opacity-70"><Type size={12} /><span>TEXT_CONTENT</span></div>
                         <input type="text" value={selectedShape.text || ''}
                           onChange={(e) => onUpdate(selectedShape.id, { text: e.target.value })}
-                          className="w-full bg-transparent border border-[#E4E3E0]/20 p-2 focus:border-[#E4E3E0] outline-none" />
+                          className="w-full bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-2 focus:border-gray-800 dark:border-[#E4E3E0] outline-none" />
                       </div>
                     )}
 
@@ -376,7 +376,7 @@ export default function Sidebar({
                               p[i] = parseFloat(e.target.value) || 0;
                               onUpdate(selectedShape.id, { position: p });
                             }}
-                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                            className="bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-1 text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none" />
                         ))}
                       </div>
                     </div>
@@ -392,7 +392,7 @@ export default function Sidebar({
                               r[i] = parseFloat(e.target.value) || 0;
                               onUpdate(selectedShape.id, { rotation: r });
                             }}
-                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                            className="bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-1 text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none" />
                         ))}
                       </div>
                     </div>
@@ -408,16 +408,16 @@ export default function Sidebar({
                               s[i] = parseFloat(e.target.value) || 0.1;
                               onUpdate(selectedShape.id, { scale: s });
                             }}
-                            className="bg-transparent border border-[#E4E3E0]/20 p-1 text-center focus:border-[#E4E3E0] outline-none" />
+                            className="bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-1 text-center focus:border-gray-800 dark:border-[#E4E3E0] outline-none" />
                         ))}
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => onUpdate(selectedShape.id, { scale: [selectedShape.scale[0]*0.5, selectedShape.scale[1]*0.5, selectedShape.scale[2]*0.5] })}
-                          className="flex-1 border border-[#E4E3E0]/20 p-1 hover:bg-[#E4E3E0] hover:text-[#141414] rounded transition-colors">
+                          className="flex-1 border border-black/10 dark:border-[#E4E3E0]/20 p-1 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] rounded transition-colors">
                           -50% SIZE
                         </button>
                         <button onClick={() => onUpdate(selectedShape.id, { scale: [selectedShape.scale[0]*2, selectedShape.scale[1]*2, selectedShape.scale[2]*2] })}
-                          className="flex-1 border border-[#E4E3E0]/20 p-1 hover:bg-[#E4E3E0] hover:text-[#141414] rounded transition-colors">
+                          className="flex-1 border border-black/10 dark:border-[#E4E3E0]/20 p-1 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] rounded transition-colors">
                           +100% SIZE
                         </button>
                       </div>
@@ -429,10 +429,10 @@ export default function Sidebar({
                       <div className="flex gap-2">
                         <input type="color" value={selectedShape.color}
                           onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
-                          className="w-10 h-8 bg-transparent border border-[#E4E3E0]/20 cursor-pointer" />
+                          className="w-10 h-8 bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 cursor-pointer" />
                         <input type="text" value={selectedShape.color}
                           onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
-                          className="flex-1 bg-transparent border border-[#E4E3E0]/20 p-1 px-2 focus:border-[#E4E3E0] outline-none uppercase" />
+                          className="flex-1 bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-1 px-2 focus:border-gray-800 dark:border-[#E4E3E0] outline-none uppercase" />
                       </div>
                     </div>
                   </div>
