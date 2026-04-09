@@ -22,21 +22,48 @@ export interface ProjectFile {
 }
 
 const MAX_HISTORY = 50;
+const LOCAL_STORAGE_KEY = '3d-studio-autosave';
+
+function loadAutosave(): { shapes: ShapeData[], groups: GroupData[], history: HistoryEntry[], historyIndex: number } | null {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.history && parsed.history.length > 0) {
+        const hIndex = parsed.historyIndex || 0;
+        const entry = parsed.history[hIndex];
+        return {
+          shapes: entry.shapes,
+          groups: entry.groups,
+          history: parsed.history,
+          historyIndex: hIndex,
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Autosave load failed", e);
+  }
+  return null;
+}
 
 export default function App() {
   const isMobile = useIsMobile();
 
-  const [shapes, setShapes] = useState<ShapeData[]>([
-    {
-      id: 'initial-box',
-      type: 'box',
-      position: [0, 0.5, 0],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      color: '#3b82f6',
-    },
-  ]);
-  const [groups, setGroups] = useState<GroupData[]>([]);
+  const [initialState] = useState(loadAutosave);
+
+  const [shapes, setShapes] = useState<ShapeData[]>(
+    initialState?.shapes || [
+      {
+        id: 'initial-box',
+        type: 'box',
+        position: [0, 0.5, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        color: '#3b82f6',
+      },
+    ]
+  );
+  const [groups, setGroups] = useState<GroupData[]>(initialState?.groups || []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [smartSnapEnabled, setSmartSnapEnabled] = useState(true);
@@ -55,9 +82,21 @@ export default function App() {
   }, []);
 
   // ─── Undo / Redo history ───
-  const historyRef = useRef<HistoryEntry[]>([{ shapes: [{ id: 'initial-box', type: 'box', position: [0,0.5,0], rotation: [0,0,0], scale: [1,1,1], color: '#3b82f6' }], groups: [] }]);
-  const historyIndexRef = useRef(0);
+  const defaultHistory: HistoryEntry[] = [{ shapes: [{ id: 'initial-box', type: 'box', position: [0,0.5,0], rotation: [0,0,0], scale: [1,1,1], color: '#3b82f6' }], groups: [] }];
+  const historyRef = useRef<HistoryEntry[]>(initialState?.history || defaultHistory);
+  const historyIndexRef = useRef(initialState?.historyIndex || 0);
   const skipHistoryRef = useRef(false);
+
+  const saveToLocalStorage = useCallback(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        history: historyRef.current,
+        historyIndex: historyIndexRef.current
+      }));
+    } catch (e) {
+      console.error('Failed to autosave', e);
+    }
+  }, []);
 
   const pushHistory = useCallback((newShapes: ShapeData[], newGroups: GroupData[]) => {
     if (skipHistoryRef.current) return;
@@ -66,7 +105,8 @@ export default function App() {
     historyRef.current.push({ shapes: JSON.parse(JSON.stringify(newShapes)), groups: JSON.parse(JSON.stringify(newGroups)) });
     if (historyRef.current.length > MAX_HISTORY) historyRef.current.shift();
     historyIndexRef.current = historyRef.current.length - 1;
-  }, []);
+    saveToLocalStorage();
+  }, [saveToLocalStorage]);
 
   const prevShapesRef = useRef(shapes);
   const prevGroupsRef = useRef(groups);
@@ -99,8 +139,9 @@ export default function App() {
     setTimeout(() => { skipHistoryRef.current = false; }, 0);
     setCanUndo(historyIndexRef.current > 0);
     setCanRedo(true);
+    saveToLocalStorage();
     showToast('Undo');
-  }, []);
+  }, [saveToLocalStorage, showToast]);
 
   const handleRedo = useCallback(() => {
     if (historyIndexRef.current >= historyRef.current.length - 1) return;
@@ -114,8 +155,9 @@ export default function App() {
     setTimeout(() => { skipHistoryRef.current = false; }, 0);
     setCanUndo(true);
     setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+    saveToLocalStorage();
     showToast('Redo');
-  }, []);
+  }, [saveToLocalStorage, showToast]);
 
   // ─── Save / Load project ───
   const handleSaveProject = useCallback(async () => {
@@ -179,6 +221,7 @@ export default function App() {
       setTimeout(() => { skipHistoryRef.current = false; }, 0);
       setCanUndo(project.historyIndex > 0);
       setCanRedo(project.historyIndex < project.history.length - 1);
+      saveToLocalStorage();
       showToast(`Загружено: ${project.name} (${project.history.length} шагов)`);
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
