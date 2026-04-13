@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet } from 'lucide-react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Combine, Image as ImageIcon, Upload as UploadIcon } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformMode } from '../App';
@@ -32,7 +32,8 @@ interface SidebarProps {
   onUngroup: (groupId: string) => void;
   onToggleGroupCollapse: (groupId: string) => void;
   onSelectGroup: (groupId: string) => void;
-  onRenameGroup: (groupId: string, name: string) => void;
+  onRenameGroup: (id: string, name: string) => void;
+  onCut: () => void;
   onResetCamera: () => void;
 }
 
@@ -58,11 +59,17 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   arrow: <ArrowUp size={18} />,
   cross: <Plus size={18} />,
   text: <Type size={18} />,
+  image: <ImageIcon size={18} />,
+  hemisphere: <Circle size={18} className="clip-path-half" />,
+  pipe: <CircleDashed size={18} style={{ strokeWidth: 3 }} />,
+  roundRoof: <Square size={18} className="rounded-t-full" />,
+  paraboloid: <Triangle size={18} className="scale-y-125" />,
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
-  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text'
+  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
+  'hemisphere', 'pipe', 'roundRoof', 'paraboloid'
 ];
 
 export default function Sidebar({
@@ -70,7 +77,7 @@ export default function Sidebar({
   canUndo, canRedo, onUndo, onRedo,
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
-  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera
+  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onCut, onResetCamera
 }: SidebarProps) {
   const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
@@ -99,10 +106,15 @@ export default function Sidebar({
     setEditingGroupId(null);
   };
 
+  const ActionButton = ({ icon, label, onClick, tooltip, highlight }: any) => (
+    <button onClick={onClick} className={`flex flex-col items-center justify-center p-2 border rounded transition-colors ${highlight ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414]'}`} title={tooltip}>
+      {icon}<span className="text-[8px] mt-0.5">{label}</span>
+    </button>
+  );
+
   return (
     <div className="w-80 shrink-0 h-full bg-white dark:bg-[#141414] text-gray-800 dark:text-[#E4E3E0] border-r border-black/10 dark:border-[#E4E3E0]/20 flex flex-col overflow-hidden font-mono text-xs">
       <div className="p-6 border-bottom border-black/10 dark:border-[#E4E3E0]/20">
-        {/* Header with undo/redo */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <img src="/favicon.png" className="w-8 h-8 object-contain" alt="Logo" />
@@ -167,37 +179,29 @@ export default function Sidebar({
           ))}
         </div>
 
-        {/* Action toolbar */}
         <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Actions</div>
-        <div className="grid grid-cols-5 gap-1.5 mb-4">
-          <button onClick={onCopy} disabled={selectedIds.size === 0}
-            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
-            title="Copy (Ctrl+C)">
-            <Copy size={14} /><span className="text-[8px] mt-0.5">COPY</span>
-          </button>
-          <button onClick={onPaste} disabled={!clipboard}
-            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
-            title="Paste (Ctrl+V)">
-            <Clipboard size={14} /><span className="text-[8px] mt-0.5">PASTE</span>
-          </button>
-          <button onClick={onDuplicate} disabled={selectedIds.size === 0}
-            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
-            title="Duplicate (Ctrl+D)">
-            <Scissors size={14} /><span className="text-[8px] mt-0.5">DUP</span>
-          </button>
-          <button onClick={onCreateGroup} disabled={selectedIds.size < 2}
-            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-amber-500/20 hover:border-amber-500/50 hover:text-amber-400 transition-colors rounded disabled:opacity-20 disabled:pointer-events-none"
-            title="Create Group (Ctrl+G)">
-            <FolderPlus size={14} /><span className="text-[8px] mt-0.5">GROUP</span>
-          </button>
-          <button onClick={onResetCamera}
-            className="flex flex-col items-center justify-center p-2 border border-black/10 dark:border-[#E4E3E0]/20 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400 transition-colors rounded"
-            title="Reset Camera (H)">
-            <Home size={14} /><span className="text-[8px] mt-0.5">HOME</span>
-          </button>
+        <div className="grid grid-cols-6 gap-1.5 mb-4">
+          <ActionButton icon={<Copy size={14} />} label="COPY" onClick={onCopy} tooltip="Copy (Ctrl+C)" />
+          <ActionButton icon={<Clipboard size={14} />} label="PASTE" onClick={onPaste} tooltip="Paste (Ctrl+V)" />
+          <ActionButton icon={<Scissors size={14} />} label="DUP" onClick={onDuplicate} tooltip="Duplicate (Ctrl+D)" />
+          <ActionButton 
+            icon={<Combine size={14} />} 
+            label="CUT" 
+            onClick={onCut} 
+            tooltip="Boolean Cut (Select 2 Entities)" 
+            highlight={(() => {
+              const entities = new Set();
+              selectedIds.forEach(id => {
+                const s = shapes.find(sh => sh.id === id);
+                entities.add(s?.groupId || s?.id);
+              });
+              return entities.size === 1 || entities.size === 2;
+            })()} 
+          />
+          <ActionButton icon={<FolderPlus size={14} />} label="GROUP" onClick={onCreateGroup} tooltip="Create Group (Ctrl+G)" />
+          <ActionButton icon={<Home size={14} />} label="HOME" onClick={onResetCamera} tooltip="Reset Camera (H)" />
         </div>
 
-        {/* Selection info */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-[10px] mb-4">
             <MousePointer size={12} />
@@ -243,7 +247,6 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Scene_Hierarchy</div>
         
-        {/* Groups */}
         {groups.map(group => {
           const groupShapes = groupedShapes.get(group.id) || [];
           const allGroupSelected = groupShapes.length > 0 && groupShapes.every(s => selectedIds.has(s.id));
@@ -301,7 +304,6 @@ export default function Sidebar({
           );
         })}
 
-        {/* Ungrouped shapes */}
         {ungroupedShapes.map((shape) => (
           <div key={shape.id} onClick={(e) => onSelect(shape.id, e.shiftKey)}
             className={`flex items-center justify-between p-3 border cursor-pointer transition-all ${
@@ -322,7 +324,6 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* ─── Collapsible Properties Panel ─── */}
       <AnimatePresence>
         {selectedShape && (
           <motion.div 
@@ -331,9 +332,8 @@ export default function Sidebar({
             exit={{ y: 100, opacity: 0 }}
             className="border-t border-black/10 dark:border-[#E4E3E0]/20 bg-gray-50 dark:bg-[#1a1a1a]"
           >
-            {/* Header — always visible, acts as toggle */}
             <div
-              className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-gray-200 dark:bg-[#222] transition-colors select-none"
+              className="flex items-center justify-between px-6 py-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-transparent dark:bg-[#222] transition-colors select-none"
               onClick={() => setPropsCollapsed(p => !p)}
             >
               <div className="flex items-center gap-2 text-[10px] uppercase opacity-60 tracking-widest">
@@ -344,7 +344,6 @@ export default function Sidebar({
                 className="text-[10px] uppercase opacity-50 hover:opacity-100 tracking-widest">CLOSE</button>
             </div>
 
-            {/* Content — collapses */}
             <AnimatePresence>
               {!propsCollapsed && (
                 <motion.div
@@ -355,7 +354,33 @@ export default function Sidebar({
                   className="overflow-hidden"
                 >
                   <div className="px-6 pb-6 space-y-5">
-                    {/* Text Content */}
+                    <div className="flex gap-2">
+                      <ActionButton icon={<Combine size={18} />} label="CUT" onClick={onCut} tooltip="Boolean Cut" highlight={selectedIds.size === 2} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><Box size={12} /><span>MATERIAL_TYPE</span></div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => onUpdate(selectedShape.id, { isHole: false })}
+                          className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded transition-colors ${
+                            !selectedShape.isHole ? 'bg-red-500/20 border-red-500 text-red-500' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-red-500/50'
+                          }`}
+                        >
+                          <div className="w-3 h-3 rounded-full bg-red-500" />
+                          <span>SOLID</span>
+                        </button>
+                        <button 
+                          onClick={() => onUpdate(selectedShape.id, { isHole: true })}
+                          className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded transition-colors ${
+                            selectedShape.isHole ? 'bg-gray-500/40 border-gray-400 text-gray-400' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-gray-400/50'
+                          }`}
+                        >
+                          <div className="w-3 h-3 rounded-full border-2 border-dashed border-gray-400" />
+                          <span>HOLE</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {selectedShape.type === 'text' && (
                       <div>
                         <div className="flex items-center gap-2 mb-2 opacity-70"><Type size={12} /><span>TEXT_CONTENT</span></div>
@@ -365,7 +390,28 @@ export default function Sidebar({
                       </div>
                     )}
 
-                    {/* Position */}
+                    {selectedShape.type === 'image' && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2 opacity-70"><ImageIcon size={12} /><span>IMAGE_SOURCE</span></div>
+                        <label className="w-full flex items-center justify-center gap-2 bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-2 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] transition-colors cursor-pointer rounded">
+                          <UploadIcon size={14} />
+                          <span>UPLOAD IMAGE</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                if (ev.target?.result) {
+                                  onUpdate(selectedShape.id, { imageUrl: ev.target.result as string });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }} />
+                        </label>
+                      </div>
+                    )}
+
                     <div>
                       <div className="flex items-center gap-2 mb-2 opacity-70"><Move size={12} /><span>POSITION_XYZ</span></div>
                       <div className="grid grid-cols-3 gap-2">
@@ -381,7 +427,6 @@ export default function Sidebar({
                       </div>
                     </div>
 
-                    {/* Rotation */}
                     <div>
                       <div className="flex items-center gap-2 mb-2 opacity-70"><RotateCw size={12} /><span>ROTATION_XYZ</span></div>
                       <div className="grid grid-cols-3 gap-2">
@@ -433,6 +478,17 @@ export default function Sidebar({
                         <input type="text" value={selectedShape.color}
                           onChange={(e) => onUpdate(selectedShape.id, { color: e.target.value })}
                           className="flex-1 bg-transparent border border-black/10 dark:border-[#E4E3E0]/20 p-1 px-2 focus:border-gray-800 dark:border-[#E4E3E0] outline-none uppercase" />
+                      </div>
+                    </div>
+
+                    {/* Opacity */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><Circle size={12} className="opacity-50" /><span>OPACITY</span></div>
+                      <div className="flex items-center gap-4">
+                        <input type="range" min="0" max="1" step="0.01" value={selectedShape.opacity ?? 1}
+                          onChange={(e) => onUpdate(selectedShape.id, { opacity: parseFloat(e.target.value) })}
+                          className="flex-1 accent-cyan-500" />
+                        <span className="w-12 text-right">{Math.round((selectedShape.opacity ?? 1) * 100)}%</span>
                       </div>
                     </div>
                   </div>

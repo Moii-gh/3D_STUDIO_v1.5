@@ -1,11 +1,14 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, PerspectiveCamera, Environment, ContactShadows, TransformControls, Text, Line, PointerLockControls } from '@react-three/drei';
 import { ShapeData } from '../types';
 import { SnapGuide } from '../smartSnap';
 import * as THREE from 'three';
 import { TransformMode } from '../App';
-import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon } from 'lucide-react';
+import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon, Wand2 } from 'lucide-react';
+
+import { ShapeType } from '../types';
+import { Geometry, Base, Subtraction, Addition } from '@react-three/csg';
 
 interface SceneProps {
   shapes: ShapeData[];
@@ -20,10 +23,13 @@ interface SceneProps {
   isMobile: boolean;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  useShaders: boolean;
+  onToggleShaders: () => void;
   onSelect: (id: string | null, additive?: boolean) => void;
   onUpdate: (id: string, updates: Partial<ShapeData>) => void;
   onGroupTransform: (id: string, updates: Partial<ShapeData>) => void;
   onMultiSelect: (ids: string[], additive: boolean) => void;
+  onAdd: (type: ShapeType, position?: [number, number, number]) => void;
   onSave: () => void;
   onLoad: () => void;
   onUndo: () => void;
@@ -65,9 +71,32 @@ crossShape.closePath();
 
 const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.02, bevelThickness: 0.02 };
 
+// ═══ Striped material for holes ═══
+const holeTexture = (() => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#666666'; ctx.fillRect(0, 0, 64, 64);
+  ctx.strokeStyle = '#999999'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(64, 64); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-32, 32); ctx.lineTo(32, 96); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(32, -32); ctx.lineTo(96, 32); ctx.stroke();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  return tex;
+})();
+
 // ═══ Shape component ═══
-const Shape = ({ shape, isSelected, onSelect }: { shape: ShapeData; isSelected: boolean; onSelect: (e: any) => void }) => {
+const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; isSelected: boolean; useShaders: boolean; onSelect: (e: any) => void }) => {
   const meshRef = useRef<THREE.Mesh>(null);
+
+  const texture = useMemo(() => {
+    if (shape.type === 'image' && shape.imageUrl) {
+      return new THREE.TextureLoader().load(shape.imageUrl);
+    }
+    return null;
+  }, [shape.type, shape.imageUrl]);
 
   if (shape.type === 'text') {
     return (
@@ -99,28 +128,128 @@ const Shape = ({ shape, isSelected, onSelect }: { shape: ShapeData; isSelected: 
       case 'torusKnot': return <torusKnotGeometry args={[0.3, 0.1, 64, 16]} />;
       case 'ring': return <ringGeometry args={[0.2, 0.5, 32]} />;
       case 'plane': return <planeGeometry args={[1, 1]} />;
+      case 'image': return <planeGeometry args={[1, 1]} />;
       case 'circle': return <circleGeometry args={[0.5, 32]} />;
       case 'star': return <extrudeGeometry args={[starShape, extrudeSettings]} />;
       case 'heart': return <extrudeGeometry args={[heartShape, extrudeSettings]} />;
       case 'arrow': return <extrudeGeometry args={[arrowShape, extrudeSettings]} />;
       case 'cross': return <extrudeGeometry args={[crossShape, extrudeSettings]} />;
+      case 'hemisphere': return <sphereGeometry args={[0.5, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2]} />;
+      case 'pipe': return (
+        <extrudeGeometry args={[
+          (() => {
+            const s = new THREE.Shape();
+            s.absarc(0, 0, 0.5, 0, Math.PI * 2, false);
+            const hole = new THREE.Path();
+            hole.absarc(0, 0, 0.35, 0, Math.PI * 2, true);
+            s.holes.push(hole);
+            return s;
+          })(),
+          { depth: 1, bevelEnabled: false }
+        ]} />
+      );
+      case 'roundRoof': return <cylinderGeometry args={[0.5, 0.5, 1, 32, 1, false, 0, Math.PI]} />;
+      case 'paraboloid': return (
+        <latheGeometry args={[
+          (() => {
+            const points = [];
+            for (let i = 0; i <= 10; i++) {
+              const x = i / 10 * 0.5;
+              const y = (x * x) * 2;
+              points.push(new THREE.Vector2(x, y));
+            }
+            return points;
+          })(),
+          32
+        ]} />
+      );
       default: return <boxGeometry />;
     }
   };
 
+  const isTransparent = (shape.opacity !== undefined && shape.opacity < 1) || shape.isHole;
+
   return (
-    <mesh ref={meshRef} position={shape.position} rotation={shape.rotation} scale={shape.scale}
+    <mesh ref={meshRef} position={shape.position} rotation={shape.type === 'roundRoof' ? [shape.rotation[0], shape.rotation[1], shape.rotation[2] + Math.PI / 2] : shape.rotation} scale={shape.scale}
       onClick={(e) => { e.stopPropagation(); onSelect(e); }}>
       {renderGeometry()}
-      <meshStandardMaterial color={shape.color} roughness={0.2} metalness={0.8}
+      <meshStandardMaterial 
+        color={shape.isHole ? '#888888' : (shape.type === 'image' && shape.imageUrl ? '#ffffff' : shape.color)}
+        map={shape.isHole ? holeTexture : (texture || undefined)}
+        roughness={useShaders ? 0.2 : 1.0} 
+        metalness={useShaders ? 0.8 : 0.0}
         emissive={isSelected ? shape.color : '#000000'} emissiveIntensity={isSelected ? 0.5 : 0}
-        side={THREE.DoubleSide} />
+        side={THREE.DoubleSide}
+        transparent={isTransparent}
+        opacity={shape.isHole ? 0.4 : (shape.opacity ?? 1)} />
       {isSelected && (
-        <mesh scale={[1.1, 1.1, 1.1]}>
+        <mesh scale={[1.1, 1.1, 1.1]} rotation={shape.type === 'roundRoof' ? [0, 0, Math.PI / 2] : [0,0,0]}>
           {renderGeometry()}
           <meshBasicMaterial color="#E4E3E0" wireframe transparent opacity={0.3} />
         </mesh>
       )}
+    </mesh>
+  );
+};
+
+// ═══ CSG Group component ═══
+const GroupedCSG = ({ shapes, isSelected, useShaders, onSelect }: { shapes: ShapeData[]; isSelected: boolean; useShaders: boolean; onSelect: (id: string, e: any) => void }) => {
+  const solids = shapes.filter(s => !s.isHole);
+  const holes = shapes.filter(s => s.isHole);
+
+  const renderShapeGeometry = (shape: ShapeData) => {
+    switch (shape.type) {
+      case 'box': return <boxGeometry />;
+      case 'sphere': return <sphereGeometry args={[0.5, 32, 32]} />;
+      case 'cylinder': return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
+      case 'cone': return <coneGeometry args={[0.5, 1, 32]} />;
+      case 'roundRoof': return <cylinderGeometry args={[0.5, 0.5, 1, 32, 1, false, 0, Math.PI]} />;
+      default: return <boxGeometry />;
+    }
+  };
+
+  if (solids.length === 0) {
+    return (
+      <group>
+        {shapes.map(s => <Shape key={s.id} shape={s} isSelected={isSelected} useShaders={useShaders} onSelect={(e) => onSelect(s.id, e)} />)}
+      </group>
+    );
+  }
+
+  const baseShape = solids[0];
+  const remainingSolids = solids.slice(1);
+
+  return (
+    <mesh onClick={(e) => { e.stopPropagation(); onSelect(baseShape.id, e); }}>
+      <Geometry>
+        <Base position={baseShape.position} 
+              rotation={baseShape.type === 'roundRoof' ? [baseShape.rotation[0], baseShape.rotation[1], baseShape.rotation[2] + Math.PI / 2] : baseShape.rotation} 
+              scale={baseShape.scale}>
+          {renderShapeGeometry(baseShape)}
+        </Base>
+        
+        {remainingSolids.map(s => (
+          <Addition key={s.id} position={s.position} 
+                    rotation={s.type === 'roundRoof' ? [s.rotation[0], s.rotation[1], s.rotation[2] + Math.PI / 2] : s.rotation} 
+                    scale={s.scale}>
+            {renderShapeGeometry(s)}
+          </Addition>
+        ))}
+
+        {holes.map(h => (
+          <Subtraction key={h.id} position={h.position} 
+                       rotation={h.type === 'roundRoof' ? [h.rotation[0], h.rotation[1], h.rotation[2] + Math.PI / 2] : h.rotation} 
+                       scale={h.scale}>
+            {renderShapeGeometry(h)}
+          </Subtraction>
+        ))}
+      </Geometry>
+      <meshStandardMaterial 
+        color={solids[0].color} 
+        roughness={useShaders ? 0.2 : 0.8} 
+        metalness={useShaders ? 0.5 : 0} 
+        emissive={isSelected ? solids[0].color : '#000000'} emissiveIntensity={isSelected ? 0.3 : 0}
+      />
     </mesh>
   );
 };
@@ -144,21 +273,35 @@ function CameraExposer({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
   return null;
 }
 
-// ═══ First Person Controller (Minecraft-like WASD) ═══
+// ═══ Minecraft-like First Person Controller ═══
+const PLAYER_HEIGHT = 1.7;
+const GRAVITY = 0.015;
+const JUMP_FORCE = 0.18;
+const WALK_SPEED = 0.08;
+
 function FirstPersonController() {
   const { camera } = useThree();
-  const moveState = useRef({ forward: false, backward: false, left: false, right: false, up: false, down: false });
-  const speed = 0.1;
+  const moveState = useRef({ forward: false, backward: false, left: false, right: false, jump: false });
+  const velocityY = useRef(0);
+  const isGrounded = useRef(true);
+  const direction = useRef(new THREE.Vector3());
+  const frontVector = useRef(new THREE.Vector3());
+  const sideVector = useRef(new THREE.Vector3());
 
   useEffect(() => {
+    camera.position.set(3, PLAYER_HEIGHT, 3);
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.code) {
         case 'KeyW': moveState.current.forward = true; break;
         case 'KeyS': moveState.current.backward = true; break;
         case 'KeyA': moveState.current.left = true; break;
         case 'KeyD': moveState.current.right = true; break;
-        case 'Space': moveState.current.up = true; break;
-        case 'ShiftLeft': moveState.current.down = true; break;
+        case 'Space': 
+          if (isGrounded.current) {
+            velocityY.current = JUMP_FORCE;
+            isGrounded.current = false;
+          }
+          break;
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -167,8 +310,6 @@ function FirstPersonController() {
         case 'KeyS': moveState.current.backward = false; break;
         case 'KeyA': moveState.current.left = false; break;
         case 'KeyD': moveState.current.right = false; break;
-        case 'Space': moveState.current.up = false; break;
-        case 'ShiftLeft': moveState.current.down = false; break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -177,22 +318,138 @@ function FirstPersonController() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [camera]);
 
   useFrame(() => {
-    if (moveState.current.forward) camera.translateZ(-speed);
-    if (moveState.current.backward) camera.translateZ(speed);
-    if (moveState.current.left) camera.translateX(-speed);
-    if (moveState.current.right) camera.translateX(speed);
-    if (moveState.current.up) camera.position.y += speed;
-    if (moveState.current.down) camera.position.y -= speed;
+    // Horizontal movement (walk on ground plane)
+    frontVector.current.set(0, 0, Number(moveState.current.backward) - Number(moveState.current.forward));
+    sideVector.current.set(Number(moveState.current.left) - Number(moveState.current.right), 0, 0);
+    direction.current.subVectors(frontVector.current, sideVector.current).normalize().multiplyScalar(WALK_SPEED);
+    direction.current.applyEuler(new THREE.Euler(0, camera.rotation.y, 0, 'YXZ'));
+
+    camera.position.x += direction.current.x;
+    camera.position.z += direction.current.z;
+
+    // Gravity
+    velocityY.current -= GRAVITY;
+    camera.position.y += velocityY.current;
+
+    // Ground collision
+    if (camera.position.y <= PLAYER_HEIGHT) {
+      camera.position.y = PLAYER_HEIGHT;
+      velocityY.current = 0;
+      isGrounded.current = true;
+    }
   });
 
   return <PointerLockControls />;
 }
 
+// ═══ Minecraft Hand (visible in FPS mode) ═══
+function MinecraftHand({ activeBlock, useShaders }: { activeBlock: ShapeType; useShaders: boolean }) {
+  const handRef = useRef<THREE.Group>(null);
+  const swingRef = useRef(0);
+  const isSwinging = useRef(false);
+  const { camera } = useThree();
+
+  useEffect(() => {
+    const handleClick = () => { isSwinging.current = true; swingRef.current = 0; };
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useFrame(() => {
+    if (!handRef.current) return;
+    // Follow camera
+    handRef.current.position.copy(camera.position);
+    handRef.current.rotation.copy(camera.rotation);
+    handRef.current.updateMatrix();
+    handRef.current.translateX(0.35);
+    handRef.current.translateY(-0.3);
+    handRef.current.translateZ(-0.5);
+
+    // Swing animation
+    if (isSwinging.current) {
+      swingRef.current += 0.15;
+      const swingAngle = Math.sin(swingRef.current * Math.PI) * 0.8;
+      handRef.current.rotateX(-swingAngle);
+      if (swingRef.current >= 1) { isSwinging.current = false; swingRef.current = 0; }
+    } else {
+      // Idle bob
+      const bob = Math.sin(Date.now() * 0.003) * 0.015;
+      handRef.current.translateY(bob);
+    }
+  });
+
+  const blockColor = useMemo(() => {
+    const colors: Record<string, string> = {
+      box: '#8B6914', sphere: '#aaaaaa', cylinder: '#888888', cone: '#666666',
+      pyramid: '#C2B280', torus: '#cc4444', capsule: '#44cc44',
+    };
+    return colors[activeBlock] || '#8B6914';
+  }, [activeBlock]);
+
+  return (
+    <group ref={handRef}>
+      {/* Arm */}
+      <mesh position={[0, -0.05, 0.1]} rotation={[0.3, 0, 0]}>
+        <boxGeometry args={[0.08, 0.08, 0.25]} />
+        <meshStandardMaterial color="#D2A06C" roughness={0.8} />
+      </mesh>
+      {/* Block in hand */}
+      <mesh position={[0, 0.05, -0.05]} rotation={[0.3, 0.5, 0]}>
+        <boxGeometry args={[0.12, 0.12, 0.12]} />
+        <meshStandardMaterial color={blockColor} roughness={useShaders ? 0.2 : 0.8} metalness={useShaders ? 0.5 : 0} />
+      </mesh>
+    </group>
+  );
+}
+
+// ═══ Block placer (raycasts from camera for FPS placement) ═══
+function MinecraftBlockPlacer({ onPlace, activeBlock }: { onPlace: (type: ShapeType, pos: [number,number,number]) => void; activeBlock: ShapeType }) {
+  const { camera, scene } = useThree();
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (e.button !== 0) return; // left click only
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        const normal = hit.face?.normal || new THREE.Vector3(0, 1, 0);
+        const worldNormal = normal.clone().transformDirection(hit.object.matrixWorld);
+        const pos: [number, number, number] = [
+          Math.round((hit.point.x + worldNormal.x * 0.5) * 2) / 2,
+          Math.round((hit.point.y + worldNormal.y * 0.5) * 2) / 2,
+          Math.round((hit.point.z + worldNormal.z * 0.5) * 2) / 2,
+        ];
+        if (pos[1] < 0.5) pos[1] = 0.5;
+        onPlace(activeBlock, pos);
+      }
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [camera, scene, onPlace, activeBlock]);
+
+  return null;
+}
+
 // ═══ Main Scene ═══
-export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, theme, onToggleTheme, onSelect, onUpdate, onGroupTransform, onMultiSelect, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
+// ═══ Hotbar block types for Minecraft mode ═══
+const HOTBAR_BLOCKS: { type: ShapeType; label: string; color: string }[] = [
+  { type: 'box', label: 'Куб', color: '#8B6914' },
+  { type: 'sphere', label: 'Сфера', color: '#aaaaaa' },
+  { type: 'cylinder', label: 'Цилиндр', color: '#888888' },
+  { type: 'cone', label: 'Конус', color: '#666666' },
+  { type: 'pyramid', label: 'Пирамида', color: '#C2B280' },
+  { type: 'torus', label: 'Тор', color: '#cc4444' },
+  { type: 'capsule', label: 'Капсула', color: '#44cc44' },
+  { type: 'octahedron', label: 'Октаэдр', color: '#4488cc' },
+  { type: 'star', label: 'Звезда', color: '#cccc44' },
+];
+
+export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, theme, onToggleTheme, useShaders, onToggleShaders, onSelect, onUpdate, onGroupTransform, onMultiSelect, onAdd, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
   const orbitRef = useRef<any>(null);
   const transformRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -201,22 +458,52 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
   // FPS Mode (desktop only)
   const [isFirstPerson, setIsFirstPerson] = useState(false);
+  const [fpsActiveSlot, setFpsActiveSlot] = useState(0);
   // Settings Mode
   const [showSettings, setShowSettings] = useState(false);
 
   // Marquee state (desktop only)
   const [marquee, setMarquee] = useState<{ sx: number; sy: number; ex: number; ey: number } | null>(null);
 
-  // Disable orbit left-click in select mode (desktop)
+  // FPS hotbar scroll + number keys
   useEffect(() => {
-    if (orbitRef.current && !isMobile) {
+    if (!isFirstPerson) return;
+    const handleWheel = (e: WheelEvent) => {
+      setFpsActiveSlot(prev => {
+        const next = prev + (e.deltaY > 0 ? 1 : -1);
+        return ((next % HOTBAR_BLOCKS.length) + HOTBAR_BLOCKS.length) % HOTBAR_BLOCKS.length;
+      });
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      const n = parseInt(e.key);
+      if (n >= 1 && n <= HOTBAR_BLOCKS.length) setFpsActiveSlot(n - 1);
+    };
+    window.addEventListener('wheel', handleWheel);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [isFirstPerson]);
+
+  const handleFpsPlace = useCallback((type: ShapeType, pos: [number, number, number]) => {
+    onAdd(type, pos);
+  }, [onAdd]);
+
+  // Configure interaction modes based on transformMode
+  useEffect(() => {
+    if (orbitRef.current) {
       if (transformMode === 'select') {
-        orbitRef.current.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+        // Disable primary rotation so selection works without moving camera
+        orbitRef.current.mouseButtons = { LEFT: 99, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+        orbitRef.current.touches = { ONE: 99, TWO: THREE.TOUCH.DOLLY_PAN };
       } else {
+        // Restore standard orbit interaction
         orbitRef.current.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+        orbitRef.current.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
       }
     }
-  }, [transformMode, isMobile]);
+  }, [transformMode]);
 
   // Reset orbit target on camera reset
   useEffect(() => {
@@ -339,7 +626,11 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
       <Canvas shadows dpr={isMobile ? [1, 1.5] : [1, 2]}>
         <PerspectiveCamera makeDefault position={[5, 5, 5]} />
         {!isMobile && isFirstPerson ? (
-          <FirstPersonController />
+          <>
+            <FirstPersonController />
+            <MinecraftHand activeBlock={HOTBAR_BLOCKS[fpsActiveSlot].type} useShaders={useShaders} />
+            <MinecraftBlockPlacer onPlace={handleFpsPlace} activeBlock={HOTBAR_BLOCKS[fpsActiveSlot].type} />
+          </>
         ) : (
           <OrbitControls
             ref={orbitRef}
@@ -349,29 +640,63 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             // Mobile: touch controls — one finger rotate, two finger pan/zoom
             enableDamping={isMobile}
             dampingFactor={isMobile ? 0.1 : 0.05}
-            touches={isMobile ? { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN } : undefined}
           />
         )}
         <CameraController resetFlag={resetCameraFlag} />
         <CameraExposer cameraRef={cameraRef} />
 
-        <ambientLight intensity={0.5} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-        <pointLight position={[-10, -10, -10]} intensity={0.5} />
-        <Environment preset="city" />
+        <ambientLight intensity={useShaders ? 0.5 : 0.9} />
+        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={useShaders ? 1 : 1.8} castShadow />
+        <pointLight position={[-10, -10, -10]} intensity={useShaders ? 0.5 : 1.0} />
+        {useShaders && <Environment preset="city" />}
 
         <group>
-          {shapes.map((shape) => {
-            if (shape.id === primarySelectedId && showGizmo) return null;
-            const isSelected = selectedIds.has(shape.id);
-            return (
-              <Shape key={shape.id} shape={shape} isSelected={isSelected}
-                onSelect={(e) => {
-                  const additive = e?.nativeEvent?.shiftKey || false;
-                  onSelect(shape.id, additive);
-                }} />
-            );
-          })}
+          {(() => {
+            const ungrouped = shapes.filter(s => !s.groupId);
+            const groups = new Map<string, ShapeData[]>();
+            shapes.forEach(s => { if (s.groupId) { const list = groups.get(s.groupId) || []; list.push(s); groups.set(s.groupId, list); } });
+
+            const groupElements = Array.from(groups.entries()).map(([gid, members]) => {
+              const hasHoles = members.some(m => m.isHole);
+              const isSelected = members.some(m => selectedIds.has(m.id));
+              
+              if (hasHoles) {
+                return (
+                  <GroupedCSG key={gid} shapes={members} isSelected={isSelected} useShaders={useShaders}
+                    onSelect={(sid, e) => {
+                      const additive = e?.nativeEvent?.shiftKey || false;
+                      onSelect(sid, additive);
+                    }} />
+                );
+              }
+
+              return members.map(shape => {
+                if (shape.id === primarySelectedId && showGizmo) return null;
+                const isSelected = selectedIds.has(shape.id);
+                return (
+                  <Shape key={shape.id} shape={shape} isSelected={isSelected} useShaders={useShaders}
+                    onSelect={(e) => {
+                      const additive = e?.nativeEvent?.shiftKey || false;
+                      onSelect(shape.id, additive);
+                    }} />
+                );
+              });
+            });
+
+            const ungroupedElements = ungrouped.map(shape => {
+              if (shape.id === primarySelectedId && showGizmo) return null;
+              const isSelected = selectedIds.has(shape.id);
+              return (
+                <Shape key={shape.id} shape={shape} isSelected={isSelected} useShaders={useShaders}
+                  onSelect={(e) => {
+                    const additive = e?.nativeEvent?.shiftKey || false;
+                    onSelect(shape.id, additive);
+                  }} />
+              );
+            });
+
+            return [...groupElements, ...ungroupedElements];
+          })()}
         </group>
 
         {showGizmo && selectedShape && (
@@ -388,7 +713,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
           >
             <Shape
               shape={{...selectedShape, position: [0,0,0], rotation: [0,0,0], scale: [1,1,1]}}
-              isSelected={true} onSelect={() => {}} />
+              isSelected={true} useShaders={useShaders} onSelect={() => {}} />
           </TransformControls>
         )}
 
@@ -423,6 +748,49 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
       {/* Marquee rectangle (desktop only) */}
       {!isMobile && marqueeStyle && <div style={marqueeStyle} />}
 
+      {/* ═══ FPS Mode Overlays ═══ */}
+      {!isMobile && isFirstPerson && (
+        <>
+          {/* Crosshair */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+            <div className="relative w-6 h-6">
+              <div className="absolute top-1/2 left-0 w-full h-[2px] bg-white/70 -translate-y-1/2" />
+              <div className="absolute left-1/2 top-0 h-full w-[2px] bg-white/70 -translate-x-1/2" />
+            </div>
+          </div>
+
+          {/* Hotbar */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-end gap-1">
+            {HOTBAR_BLOCKS.map((block, i) => (
+              <button
+                key={block.type}
+                onClick={() => setFpsActiveSlot(i)}
+                className={`relative flex flex-col items-center justify-center w-12 h-12 rounded transition-all pointer-events-auto ${
+                  i === fpsActiveSlot
+                    ? 'bg-white/30 border-2 border-white scale-110 shadow-lg shadow-white/20'
+                    : 'bg-black/40 border border-white/20 hover:bg-black/60'
+                }`}
+              >
+                <div
+                  className="w-6 h-6 rounded-sm"
+                  style={{ backgroundColor: block.color }}
+                />
+                <span className="absolute -bottom-5 text-[8px] font-mono text-white/60 uppercase tracking-wider whitespace-nowrap">
+                  {i === fpsActiveSlot ? block.label : (i + 1)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* FPS hint */}
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="bg-black/50 backdrop-blur px-4 py-1.5 rounded font-mono text-[10px] text-white/60 uppercase tracking-widest">
+              WASD — ходить · Пробел — прыгать · ЛКМ — поставить блок · 1-9 — слот · ESC — выйти
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ═══ Desktop-only overlay UI ═══ */}
       {!isMobile && (
         <>
@@ -454,6 +822,13 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
                     >
                       {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
                       <span>{theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}</span>
+                    </button>
+                    <button
+                      onClick={onToggleShaders}
+                      className="w-full text-left px-3 py-2 rounded text-gray-800 dark:text-[#E4E3E0] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414] font-mono text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                    >
+                      <Wand2 size={12} className={useShaders ? 'text-purple-500' : ''} />
+                      <span>{useShaders ? 'Отключить шейдеры' : 'Включить шейдеры'}</span>
                     </button>
                     <a 
                       href="https://vk.com/moii.unlim" 

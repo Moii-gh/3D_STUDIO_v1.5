@@ -1,4 +1,4 @@
-export type ShapeType = 'box' | 'sphere' | 'cylinder' | 'cone' | 'torus' | 'pyramid' | 'capsule' | 'octahedron' | 'dodecahedron' | 'prism' | 'icosahedron' | 'tetrahedron' | 'torusKnot' | 'ring' | 'plane' | 'circle' | 'star' | 'heart' | 'arrow' | 'cross' | 'text';
+export type ShapeType = 'box' | 'sphere' | 'cylinder' | 'cone' | 'torus' | 'pyramid' | 'capsule' | 'octahedron' | 'dodecahedron' | 'prism' | 'icosahedron' | 'tetrahedron' | 'torusKnot' | 'ring' | 'plane' | 'circle' | 'star' | 'heart' | 'arrow' | 'cross' | 'text' | 'image' | 'hemisphere' | 'pipe' | 'roundRoof' | 'paraboloid';
 
 export interface ShapeData {
   id: string;
@@ -7,7 +7,10 @@ export interface ShapeData {
   rotation: [number, number, number];
   scale: [number, number, number];
   color: string;
+  opacity?: number;
+  isHole?: boolean;
   text?: string;
+  imageUrl?: string;
   groupId?: string;
 }
 

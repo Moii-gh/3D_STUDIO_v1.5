@@ -58,6 +58,10 @@ const SHAPE_HALF_SIZES: Record<string, [number, number, number]> = {
   arrow: [0.5, 0.5, 0.12],
   cross: [0.5, 0.5, 0.12],
   text: [0.5, 0.25, 0.05],
+  hemisphere: [0.5, 0.25, 0.5],
+  pipe: [0.5, 0.5, 0.5],
+  roundRoof: [0.5, 0.25, 0.5],
+  paraboloid: [0.5, 0.5, 0.5],
 };
 
 export function getShapeBBox(shape: ShapeData): BBox {

@@ -6,6 +6,7 @@ import { ShapeData, ShapeType, GroupData } from './types';
 import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
 import { useIsMobile } from './hooks/useMobile';
 import { useTheme } from './hooks/useTheme';
+import * as THREE from 'three';
 
 export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
 
@@ -74,6 +75,11 @@ export default function App() {
   const [clipboard, setClipboard] = useState<{ shapes: ShapeData[]; groups: GroupData[] } | null>(null);
   const [resetCameraFlag, setResetCameraFlag] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [useShaders, setUseShaders] = useState(() => localStorage.getItem('3d-studio-shaders') !== 'false');
+
+  useEffect(() => {
+    localStorage.setItem('3d-studio-shaders', String(useShaders));
+  }, [useShaders]);
 
   // ─── Toast ───
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,9 +274,9 @@ export default function App() {
 
   const primarySelectedId = computePrimaryId();
 
-  const handleAddShape = useCallback((type: ShapeType) => {
-    let position: [number, number, number] = [0, 0.5, 0];
-    if (primarySelectedId) {
+  const handleAddShape = useCallback((type: ShapeType, fpsPosition?: [number, number, number]) => {
+    let position: [number, number, number] = fpsPosition || [0, 0.5, 0];
+    if (!fpsPosition && primarySelectedId) {
       const sel = shapes.find(s => s.id === primarySelectedId);
       if (sel) {
         const selBBox = getShapeBBox(sel);
@@ -314,29 +320,77 @@ export default function App() {
       const primary = prev.find(s => s.id === id);
       if (!primary) return prev;
 
-      let finalUpdates = { ...updates };
-      if (smartSnapEnabled && updates.position) {
-        const testShape = { ...primary, ...updates };
-        const result = computeSmartSnap(testShape, updates.position, prev, true);
-        finalUpdates.position = result.position;
-        setActiveGuides(result.guides);
-      } else if (updates.position) {
-        setActiveGuides([]);
+      const groupMembers = primary.groupId ? prev.filter(s => s.groupId === primary.groupId) : [primary];
+      
+      // ─── Proper Group Transformation ───
+      // If ONLY ONE object is selected (even if in a group), transform ONLY that object.
+      // This allows interactive "scaling of the cutter" inside the group.
+      // If more than 1 object is selected, we assume group movement.
+      if (selectedIds.size <= 1) {
+        return prev.map(s => s.id === id ? { ...s, ...updates } : s);
       }
 
-      const posDelta: [number,number,number] = finalUpdates.position
-        ? [finalUpdates.position[0]-primary.position[0], finalUpdates.position[1]-primary.position[1], finalUpdates.position[2]-primary.position[2]]
-        : [0,0,0];
+      if (groupMembers.length <= 1) {
+        return prev.map(s => s.id === id ? { ...s, ...updates } : s);
+      }
+      // 1. Compute group center (pivot)
+      const pivot = new THREE.Vector3(0, 0, 0);
+      groupMembers.forEach(m => { pivot.x += m.position[0]; pivot.y += m.position[1]; pivot.z += m.position[2]; });
+      pivot.divideScalar(groupMembers.length);
+
+      // 2. Identify Deltas from Primary
+      // We use the change in primary relative to its OLD state to define the group transform
+      const oldPos = new THREE.Vector3(...primary.position);
+      const newPos = updates.position ? new THREE.Vector3(...updates.position) : oldPos.clone();
+      
+      const oldRot = new THREE.Euler(...primary.rotation);
+      const newRot = updates.rotation ? new THREE.Euler(...updates.rotation) : oldRot.clone();
+      
+      const oldQuat = new THREE.Quaternion().setFromEuler(oldRot);
+      const newQuat = new THREE.Quaternion().setFromEuler(newRot);
+      const deltaQuat = new THREE.Quaternion().multiplyQuaternions(newQuat, oldQuat.clone().invert());
+
+      const oldScale = new THREE.Vector3(...primary.scale);
+      const newScale = updates.scale ? new THREE.Vector3(...updates.scale) : oldScale.clone();
+      const scaleFactor = new THREE.Vector3(newScale.x / oldScale.x, newScale.y / oldScale.y, newScale.z / oldScale.z);
+
       return prev.map(shape => {
-        if (shape.id === id) {
-          const ns = { ...shape, ...finalUpdates };
-          if (snapToGrid && finalUpdates.position) ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
-          return ns;
+        if (!primary.groupId || shape.groupId !== primary.groupId) return shape;
+
+        const ns = { ...shape };
+        const shapePos = new THREE.Vector3(...shape.position);
+        
+        // --- Apply Transform ---
+        
+        // Scaling around pivot
+        if (updates.scale) {
+          shapePos.sub(pivot).multiply(scaleFactor).add(pivot);
+          ns.scale = [shape.scale[0] * scaleFactor.x, shape.scale[1] * scaleFactor.y, shape.scale[2] * scaleFactor.z];
         }
-        if (primary.groupId && shape.groupId === primary.groupId && finalUpdates.position) {
-          return { ...shape, position: [shape.position[0]+posDelta[0], shape.position[1]+posDelta[1], shape.position[2]+posDelta[2]] as [number,number,number] };
+
+        // Rotation around pivot
+        if (updates.rotation) {
+          shapePos.sub(pivot).applyQuaternion(deltaQuat).add(pivot);
+          const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...shape.rotation));
+          q.premultiply(deltaQuat);
+          const e = new THREE.Euler().setFromQuaternion(q);
+          ns.rotation = [e.x, e.y, e.z];
         }
-        return shape;
+
+        // Translation
+        if (updates.position) {
+          const posDelta = new THREE.Vector3().subVectors(newPos, oldPos);
+          shapePos.add(posDelta);
+        }
+
+        ns.position = [shapePos.x, shapePos.y, shapePos.z];
+
+        // Grid Snap (if enabled)
+        if (snapToGrid && updates.position) {
+          ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
+        }
+
+        return ns;
       });
     });
   }, [snapToGrid, smartSnapEnabled]);
@@ -362,6 +416,79 @@ export default function App() {
     setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, groupId } : s));
     showToast(`Created group "${newGroup.name}"`);
   }, [selectedIds, showToast]);
+
+  const handleCutTool = useCallback(() => {
+    // ─── Option 1: Interactive Cutter ───
+    if (selectedIds.size === 1) {
+      const primaryId = Array.from(selectedIds)[0];
+      const primary = shapes.find(s => s.id === primaryId);
+      if (!primary) return;
+      
+      const holeId = 'hole_' + Math.random().toString(36).substr(2, 6);
+      const hole: ShapeData = {
+        id: holeId,
+        type: 'box',
+        position: [...primary.position],
+        rotation: [...primary.rotation],
+        scale: [primary.scale[0] * 0.5, primary.scale[1] * 0.5, primary.scale[2] * 0.5],
+        color: '#888888',
+        isHole: true
+      };
+      
+      const newGroupId = primary.groupId || ('cut_' + Math.random().toString(36).substr(2, 6));
+      if (!primary.groupId) {
+        setGroups(prev => [...prev, { id: newGroupId, name: `CUT_${newGroupId.slice(0,4).toUpperCase()}`, collapsed: false }]);
+      }
+      
+      setShapes(prev => [
+        ...prev.map(s => s.id === primaryId ? { ...s, groupId: newGroupId } : s),
+        { ...hole, groupId: newGroupId }
+      ]);
+      
+      setSelectedIds(new Set([holeId]));
+      setTransformMode('scale');
+      showToast('Cutter created! Use SCALE to adjust the hole.');
+      return;
+    }
+
+    // ─── Entity-based Cutting (Multiple Selection) ───
+    const entities = new Map<string, string[]>(); // groupId or shapeId -> members
+    selectedIds.forEach(id => {
+      const s = shapes.find(sh => sh.id === id);
+      const key = s?.groupId || s?.id;
+      if (key) {
+        const list = entities.get(key) || [];
+        list.push(id);
+        entities.set(key, list);
+      }
+    });
+
+    if (entities.size !== 2) { 
+      showToast('Select 2 entities: Body and then Cutter'); 
+      return; 
+    }
+
+    const idsAr = Array.from(selectedIds);
+    const lastId = idsAr[idsAr.length - 1];
+    
+    let cutterKey = '';
+    for (const [key, members] of entities.entries()) {
+      if (members.includes(lastId)) { cutterKey = key; break; }
+    }
+
+    const cutterMembers = entities.get(cutterKey) || [];
+    const baseMembers = Array.from(entities.entries()).filter(([k]) => k !== cutterKey).flatMap(([, v]) => v);
+    
+    const newGroupId = 'cut_' + Math.random().toString(36).substr(2, 6);
+    setGroups(prev => [...prev.filter(g => !entities.has(g.id)), { id: newGroupId, name: `CUT_${newGroupId.slice(0,4).toUpperCase()}`, collapsed: false }]);
+    setShapes(prev => prev.map(s => {
+      if (cutterMembers.includes(s.id)) return { ...s, groupId: newGroupId, isHole: true };
+      if (baseMembers.includes(s.id)) return { ...s, groupId: newGroupId, isHole: false };
+      return s;
+    }));
+    
+    showToast('Cut operation applied');
+  }, [selectedIds, shapes, showToast]);
 
   const handleUngroup = useCallback((groupId: string) => {
     setShapes(prev => prev.map(s => s.groupId === groupId ? { ...s, groupId: undefined } : s));
@@ -480,6 +607,7 @@ export default function App() {
           onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
           onToggleGroupCollapse={handleToggleGroupCollapse}
           onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
+          onCut={handleCutTool}
           onResetCamera={handleResetCamera}
         />
       )}
@@ -495,8 +623,10 @@ export default function App() {
           historyIndex={historyIndexRef.current}
           isMobile={isMobile}
           theme={theme} onToggleTheme={toggleTheme}
+          useShaders={useShaders} onToggleShaders={() => setUseShaders(!useShaders)}
           onSelect={handleSelect} onUpdate={handleUpdateShape}
           onGroupTransform={handleGroupTransform} onMultiSelect={handleMultiSelect}
+          onAdd={handleAddShape}
           onSave={handleSaveProject} onLoad={handleLoadProject}
           onUndo={handleUndo} onRedo={handleRedo}
           canUndo={canUndo} canRedo={canRedo}

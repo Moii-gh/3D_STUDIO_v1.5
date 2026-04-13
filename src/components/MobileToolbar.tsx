@@ -5,7 +5,7 @@ import {
   Heart, ArrowUp, Plus, MousePointer, Undo2, Redo2, Menu, X,
   Download, Upload, Home, Grid, Magnet, Copy, Clipboard,
   Scissors, FolderPlus, Type, Layers, ChevronDown, ChevronRight, Ungroup, Palette,
-  Sun, Moon, Settings
+  Sun, Moon, Settings, Image as ImageIcon, Upload as UploadIcon
 } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { TransformMode } from '../App';
@@ -69,11 +69,12 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   arrow: <ArrowUp size={20} />,
   cross: <Plus size={20} />,
   text: <Type size={20} />,
+  image: <ImageIcon size={20} />,
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
-  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text'
+  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image'
 ];
 
 type MobilePanel = 'none' | 'shapes' | 'hierarchy' | 'properties';
@@ -491,6 +492,31 @@ export default function MobileToolbar({
                       <input type="text" value={selectedShape.text || ''}
                         onChange={(e) => onUpdate(selectedShape.id, { text: e.target.value })}
                         className="w-full bg-gray-100 dark:bg-[#1e1e1e] border border-black/10 dark:border-[#E4E3E0]/20 p-3 rounded-xl focus:border-gray-800 dark:border-[#E4E3E0] outline-none font-mono text-sm" />
+                    </div>
+                  )}
+
+                  {/* Image Content */}
+                  {selectedShape.type === 'image' && (
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-2 opacity-70 font-mono text-[10px]">
+                        <ImageIcon size={12} /><span>ИЗОБРАЖЕНИЕ</span>
+                      </div>
+                      <label className="flex items-center justify-center gap-2 w-full bg-gray-100 dark:bg-[#1e1e1e] hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-[#141414] border border-black/10 dark:border-[#E4E3E0]/20 p-3 rounded-xl transition-colors cursor-pointer text-sm font-mono uppercase tracking-widest">
+                        <UploadIcon size={14} />
+                        <span>Загрузить</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              if (ev.target?.result) {
+                                onUpdate(selectedShape.id, { imageUrl: ev.target.result as string });
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                      </label>
                     </div>
                   )}
 
