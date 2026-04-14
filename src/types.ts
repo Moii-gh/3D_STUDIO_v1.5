@@ -8,7 +8,6 @@ export interface ShapeData {
   scale: [number, number, number];
   color: string;
   opacity?: number;
-  isHole?: boolean;
   text?: string;
   imageUrl?: string;
   groupId?: string;

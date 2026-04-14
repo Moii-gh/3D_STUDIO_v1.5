@@ -417,78 +417,7 @@ export default function App() {
     showToast(`Created group "${newGroup.name}"`);
   }, [selectedIds, showToast]);
 
-  const handleCutTool = useCallback(() => {
-    // ─── Option 1: Interactive Cutter ───
-    if (selectedIds.size === 1) {
-      const primaryId = Array.from(selectedIds)[0];
-      const primary = shapes.find(s => s.id === primaryId);
-      if (!primary) return;
-      
-      const holeId = 'hole_' + Math.random().toString(36).substr(2, 6);
-      const hole: ShapeData = {
-        id: holeId,
-        type: 'box',
-        position: [...primary.position],
-        rotation: [...primary.rotation],
-        scale: [primary.scale[0] * 0.5, primary.scale[1] * 0.5, primary.scale[2] * 0.5],
-        color: '#888888',
-        isHole: true
-      };
-      
-      const newGroupId = primary.groupId || ('cut_' + Math.random().toString(36).substr(2, 6));
-      if (!primary.groupId) {
-        setGroups(prev => [...prev, { id: newGroupId, name: `CUT_${newGroupId.slice(0,4).toUpperCase()}`, collapsed: false }]);
-      }
-      
-      setShapes(prev => [
-        ...prev.map(s => s.id === primaryId ? { ...s, groupId: newGroupId } : s),
-        { ...hole, groupId: newGroupId }
-      ]);
-      
-      setSelectedIds(new Set([holeId]));
-      setTransformMode('scale');
-      showToast('Cutter created! Use SCALE to adjust the hole.');
-      return;
-    }
 
-    // ─── Entity-based Cutting (Multiple Selection) ───
-    const entities = new Map<string, string[]>(); // groupId or shapeId -> members
-    selectedIds.forEach(id => {
-      const s = shapes.find(sh => sh.id === id);
-      const key = s?.groupId || s?.id;
-      if (key) {
-        const list = entities.get(key) || [];
-        list.push(id);
-        entities.set(key, list);
-      }
-    });
-
-    if (entities.size !== 2) { 
-      showToast('Select 2 entities: Body and then Cutter'); 
-      return; 
-    }
-
-    const idsAr = Array.from(selectedIds);
-    const lastId = idsAr[idsAr.length - 1];
-    
-    let cutterKey = '';
-    for (const [key, members] of entities.entries()) {
-      if (members.includes(lastId)) { cutterKey = key; break; }
-    }
-
-    const cutterMembers = entities.get(cutterKey) || [];
-    const baseMembers = Array.from(entities.entries()).filter(([k]) => k !== cutterKey).flatMap(([, v]) => v);
-    
-    const newGroupId = 'cut_' + Math.random().toString(36).substr(2, 6);
-    setGroups(prev => [...prev.filter(g => !entities.has(g.id)), { id: newGroupId, name: `CUT_${newGroupId.slice(0,4).toUpperCase()}`, collapsed: false }]);
-    setShapes(prev => prev.map(s => {
-      if (cutterMembers.includes(s.id)) return { ...s, groupId: newGroupId, isHole: true };
-      if (baseMembers.includes(s.id)) return { ...s, groupId: newGroupId, isHole: false };
-      return s;
-    }));
-    
-    showToast('Cut operation applied');
-  }, [selectedIds, shapes, showToast]);
 
   const handleUngroup = useCallback((groupId: string) => {
     setShapes(prev => prev.map(s => s.groupId === groupId ? { ...s, groupId: undefined } : s));
@@ -607,7 +536,6 @@ export default function App() {
           onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
           onToggleGroupCollapse={handleToggleGroupCollapse}
           onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
-          onCut={handleCutTool}
           onResetCamera={handleResetCamera}
         />
       )}

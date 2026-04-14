@@ -12,7 +12,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@react-three/csg": "^4.0.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -25,7 +24,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.183.2",
-    "three-bvh-csg": "^0.0.18",
     "vite": "^6.2.0"
   },
   "devDependencies": {

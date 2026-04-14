@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Combine, Image as ImageIcon, Upload as UploadIcon } from 'lucide-react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Image as ImageIcon, Upload as UploadIcon } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformMode } from '../App';
@@ -33,7 +33,6 @@ interface SidebarProps {
   onToggleGroupCollapse: (groupId: string) => void;
   onSelectGroup: (groupId: string) => void;
   onRenameGroup: (id: string, name: string) => void;
-  onCut: () => void;
   onResetCamera: () => void;
 }
 
@@ -77,7 +76,7 @@ export default function Sidebar({
   canUndo, canRedo, onUndo, onRedo,
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
-  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onCut, onResetCamera
+  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera
 }: SidebarProps) {
   const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
@@ -184,20 +183,6 @@ export default function Sidebar({
           <ActionButton icon={<Copy size={14} />} label="COPY" onClick={onCopy} tooltip="Copy (Ctrl+C)" />
           <ActionButton icon={<Clipboard size={14} />} label="PASTE" onClick={onPaste} tooltip="Paste (Ctrl+V)" />
           <ActionButton icon={<Scissors size={14} />} label="DUP" onClick={onDuplicate} tooltip="Duplicate (Ctrl+D)" />
-          <ActionButton 
-            icon={<Combine size={14} />} 
-            label="CUT" 
-            onClick={onCut} 
-            tooltip="Boolean Cut (Select 2 Entities)" 
-            highlight={(() => {
-              const entities = new Set();
-              selectedIds.forEach(id => {
-                const s = shapes.find(sh => sh.id === id);
-                entities.add(s?.groupId || s?.id);
-              });
-              return entities.size === 1 || entities.size === 2;
-            })()} 
-          />
           <ActionButton icon={<FolderPlus size={14} />} label="GROUP" onClick={onCreateGroup} tooltip="Create Group (Ctrl+G)" />
           <ActionButton icon={<Home size={14} />} label="HOME" onClick={onResetCamera} tooltip="Reset Camera (H)" />
         </div>
@@ -354,32 +339,6 @@ export default function Sidebar({
                   className="overflow-hidden"
                 >
                   <div className="px-6 pb-6 space-y-5">
-                    <div className="flex gap-2">
-                      <ActionButton icon={<Combine size={18} />} label="CUT" onClick={onCut} tooltip="Boolean Cut" highlight={selectedIds.size === 2} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2 opacity-70"><Box size={12} /><span>MATERIAL_TYPE</span></div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => onUpdate(selectedShape.id, { isHole: false })}
-                          className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded transition-colors ${
-                            !selectedShape.isHole ? 'bg-red-500/20 border-red-500 text-red-500' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-red-500/50'
-                          }`}
-                        >
-                          <div className="w-3 h-3 rounded-full bg-red-500" />
-                          <span>SOLID</span>
-                        </button>
-                        <button 
-                          onClick={() => onUpdate(selectedShape.id, { isHole: true })}
-                          className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded transition-colors ${
-                            selectedShape.isHole ? 'bg-gray-500/40 border-gray-400 text-gray-400' : 'border-black/10 dark:border-[#E4E3E0]/20 hover:border-gray-400/50'
-                          }`}
-                        >
-                          <div className="w-3 h-3 rounded-full border-2 border-dashed border-gray-400" />
-                          <span>HOLE</span>
-                        </button>
-                      </div>
-                    </div>
 
                     {selectedShape.type === 'text' && (
                       <div>

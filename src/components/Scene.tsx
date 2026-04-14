@@ -8,7 +8,6 @@ import { TransformMode } from '../App';
 import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon, Wand2 } from 'lucide-react';
 
 import { ShapeType } from '../types';
-import { Geometry, Base, Subtraction, Addition } from '@react-three/csg';
 
 interface SceneProps {
   shapes: ShapeData[];
@@ -71,21 +70,7 @@ crossShape.closePath();
 
 const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.02, bevelThickness: 0.02 };
 
-// ═══ Striped material for holes ═══
-const holeTexture = (() => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64; canvas.height = 64;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#666666'; ctx.fillRect(0, 0, 64, 64);
-  ctx.strokeStyle = '#999999'; ctx.lineWidth = 8;
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(64, 64); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-32, 32); ctx.lineTo(32, 96); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(32, -32); ctx.lineTo(96, 32); ctx.stroke();
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
-  return tex;
-})();
+
 
 // ═══ Shape component ═══
 const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; isSelected: boolean; useShaders: boolean; onSelect: (e: any) => void }) => {
@@ -167,21 +152,21 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
     }
   };
 
-  const isTransparent = (shape.opacity !== undefined && shape.opacity < 1) || shape.isHole;
+  const isTransparent = (shape.opacity !== undefined && shape.opacity < 1);
 
   return (
     <mesh ref={meshRef} position={shape.position} rotation={shape.type === 'roundRoof' ? [shape.rotation[0], shape.rotation[1], shape.rotation[2] + Math.PI / 2] : shape.rotation} scale={shape.scale}
       onClick={(e) => { e.stopPropagation(); onSelect(e); }}>
       {renderGeometry()}
       <meshStandardMaterial 
-        color={shape.isHole ? '#888888' : (shape.type === 'image' && shape.imageUrl ? '#ffffff' : shape.color)}
-        map={shape.isHole ? holeTexture : (texture || undefined)}
+        color={shape.type === 'image' && shape.imageUrl ? '#ffffff' : shape.color}
+        map={texture || undefined}
         roughness={useShaders ? 0.2 : 1.0} 
         metalness={useShaders ? 0.8 : 0.0}
         emissive={isSelected ? shape.color : '#000000'} emissiveIntensity={isSelected ? 0.5 : 0}
         side={THREE.DoubleSide}
         transparent={isTransparent}
-        opacity={shape.isHole ? 0.4 : (shape.opacity ?? 1)} />
+        opacity={shape.opacity ?? 1} />
       {isSelected && (
         <mesh scale={[1.1, 1.1, 1.1]} rotation={shape.type === 'roundRoof' ? [0, 0, Math.PI / 2] : [0,0,0]}>
           {renderGeometry()}
@@ -192,67 +177,6 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
   );
 };
 
-// ═══ CSG Group component ═══
-const GroupedCSG = ({ shapes, isSelected, useShaders, onSelect }: { shapes: ShapeData[]; isSelected: boolean; useShaders: boolean; onSelect: (id: string, e: any) => void }) => {
-  const solids = shapes.filter(s => !s.isHole);
-  const holes = shapes.filter(s => s.isHole);
-
-  const renderShapeGeometry = (shape: ShapeData) => {
-    switch (shape.type) {
-      case 'box': return <boxGeometry />;
-      case 'sphere': return <sphereGeometry args={[0.5, 32, 32]} />;
-      case 'cylinder': return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
-      case 'cone': return <coneGeometry args={[0.5, 1, 32]} />;
-      case 'roundRoof': return <cylinderGeometry args={[0.5, 0.5, 1, 32, 1, false, 0, Math.PI]} />;
-      default: return <boxGeometry />;
-    }
-  };
-
-  if (solids.length === 0) {
-    return (
-      <group>
-        {shapes.map(s => <Shape key={s.id} shape={s} isSelected={isSelected} useShaders={useShaders} onSelect={(e) => onSelect(s.id, e)} />)}
-      </group>
-    );
-  }
-
-  const baseShape = solids[0];
-  const remainingSolids = solids.slice(1);
-
-  return (
-    <mesh onClick={(e) => { e.stopPropagation(); onSelect(baseShape.id, e); }}>
-      <Geometry>
-        <Base position={baseShape.position} 
-              rotation={baseShape.type === 'roundRoof' ? [baseShape.rotation[0], baseShape.rotation[1], baseShape.rotation[2] + Math.PI / 2] : baseShape.rotation} 
-              scale={baseShape.scale}>
-          {renderShapeGeometry(baseShape)}
-        </Base>
-        
-        {remainingSolids.map(s => (
-          <Addition key={s.id} position={s.position} 
-                    rotation={s.type === 'roundRoof' ? [s.rotation[0], s.rotation[1], s.rotation[2] + Math.PI / 2] : s.rotation} 
-                    scale={s.scale}>
-            {renderShapeGeometry(s)}
-          </Addition>
-        ))}
-
-        {holes.map(h => (
-          <Subtraction key={h.id} position={h.position} 
-                       rotation={h.type === 'roundRoof' ? [h.rotation[0], h.rotation[1], h.rotation[2] + Math.PI / 2] : h.rotation} 
-                       scale={h.scale}>
-            {renderShapeGeometry(h)}
-          </Subtraction>
-        ))}
-      </Geometry>
-      <meshStandardMaterial 
-        color={solids[0].color} 
-        roughness={useShaders ? 0.2 : 0.8} 
-        metalness={useShaders ? 0.5 : 0} 
-        emissive={isSelected ? solids[0].color : '#000000'} emissiveIntensity={isSelected ? 0.3 : 0}
-      />
-    </mesh>
-  );
-};
 
 // ═══ Camera controller ═══
 function CameraController({ resetFlag }: { resetFlag: number }) {
@@ -657,19 +581,6 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             shapes.forEach(s => { if (s.groupId) { const list = groups.get(s.groupId) || []; list.push(s); groups.set(s.groupId, list); } });
 
             const groupElements = Array.from(groups.entries()).map(([gid, members]) => {
-              const hasHoles = members.some(m => m.isHole);
-              const isSelected = members.some(m => selectedIds.has(m.id));
-              
-              if (hasHoles) {
-                return (
-                  <GroupedCSG key={gid} shapes={members} isSelected={isSelected} useShaders={useShaders}
-                    onSelect={(sid, e) => {
-                      const additive = e?.nativeEvent?.shiftKey || false;
-                      onSelect(sid, additive);
-                    }} />
-                );
-              }
-
               return members.map(shape => {
                 if (shape.id === primarySelectedId && showGizmo) return null;
                 const isSelected = selectedIds.has(shape.id);
