@@ -5,7 +5,7 @@ import {
   Heart, ArrowUp, Plus, MousePointer, Undo2, Redo2, Menu, X,
   Download, Upload, Home, Grid, Magnet, Copy, Clipboard,
   Scissors, FolderPlus, Type, Layers, ChevronDown, ChevronRight, Ungroup, Palette,
-  Sun, Moon, Settings, Image as ImageIcon, Upload as UploadIcon
+  Sun, Moon, Settings, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen
 } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { TransformMode } from '../App';
@@ -45,6 +45,7 @@ interface MobileToolbarProps {
   onLoad: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  onDraw: () => void;
 }
 
 const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
@@ -70,11 +71,18 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   cross: <Plus size={20} />,
   text: <Type size={20} />,
   image: <ImageIcon size={20} />,
+  hemisphere: <Circle size={20} className="clip-path-half" />,
+  pipe: <CircleDashed size={20} style={{ strokeWidth: 3 }} />,
+  roundRoof: <Square size={20} className="rounded-t-full" />,
+  paraboloid: <Triangle size={20} className="scale-y-125" />,
+  roundedStairs: <AlignEndHorizontal size={20} />,
+  drawing: <Pen size={20} />,
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
-  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image'
+  'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
+  'hemisphere', 'pipe', 'roundRoof', 'paraboloid', 'roundedStairs'
 ];
 
 type MobilePanel = 'none' | 'shapes' | 'hierarchy' | 'properties';
@@ -85,7 +93,7 @@ export default function MobileToolbar({
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
   onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera,
-  onSave, onLoad, theme, onToggleTheme
+  onSave, onLoad, theme, onToggleTheme, onDraw
 }: MobileToolbarProps) {
   const [activePanel, setActivePanel] = useState<MobilePanel>('none');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -371,6 +379,14 @@ export default function MobileToolbar({
                         <span className="text-[7px] font-mono uppercase mt-1.5 opacity-50">{type}</span>
                       </button>
                     ))}
+                    {/* Draw custom shape */}
+                    <button
+                      onClick={() => { onDraw(); setActivePanel('none'); }}
+                      className="flex flex-col items-center justify-center p-3 border border-cyan-500/30 bg-cyan-500/10 rounded-xl active:scale-90 active:bg-cyan-500/20 transition-all col-span-2"
+                    >
+                      <Pen size={20} className="text-cyan-400" />
+                      <span className="text-[7px] font-mono uppercase mt-1.5 text-cyan-400">Рисовать</span>
+                    </button>
                   </div>
                 </div>
               )}

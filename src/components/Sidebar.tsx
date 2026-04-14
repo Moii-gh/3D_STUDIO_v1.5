@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Image as ImageIcon, Upload as UploadIcon } from 'lucide-react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformMode } from '../App';
@@ -34,6 +34,7 @@ interface SidebarProps {
   onSelectGroup: (groupId: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onResetCamera: () => void;
+  onDraw: () => void;
 }
 
 const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
@@ -63,12 +64,14 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   pipe: <CircleDashed size={18} style={{ strokeWidth: 3 }} />,
   roundRoof: <Square size={18} className="rounded-t-full" />,
   paraboloid: <Triangle size={18} className="scale-y-125" />,
+  roundedStairs: <AlignEndHorizontal size={18} />,
+  drawing: <Pen size={18} />,
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
   'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
-  'hemisphere', 'pipe', 'roundRoof', 'paraboloid'
+  'hemisphere', 'pipe', 'roundRoof', 'paraboloid', 'roundedStairs'
 ];
 
 export default function Sidebar({
@@ -76,7 +79,7 @@ export default function Sidebar({
   canUndo, canRedo, onUndo, onRedo,
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
   onDeleteSelected, onCopy, onPaste, onDuplicate,
-  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera
+  onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera, onDraw
 }: SidebarProps) {
   const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
@@ -176,6 +179,15 @@ export default function Sidebar({
               {SHAPE_ICONS[type]}
             </button>
           ))}
+          {/* Special: Draw custom shape */}
+          <button
+            onClick={onDraw}
+            className="flex flex-col items-center justify-center p-2 border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 transition-colors rounded col-span-2"
+            title="Draw custom shape"
+          >
+            <Pen size={18} />
+            <span className="text-[7px] mt-0.5 uppercase">Рисовать</span>
+          </button>
         </div>
 
         <div className="text-[10px] uppercase opacity-50 mb-2 tracking-widest">Actions</div>

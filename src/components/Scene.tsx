@@ -5,6 +5,7 @@ import { ShapeData } from '../types';
 import { SnapGuide } from '../smartSnap';
 import * as THREE from 'three';
 import { TransformMode } from '../App';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon, Wand2 } from 'lucide-react';
 
 import { ShapeType } from '../types';
@@ -67,6 +68,41 @@ crossShape.lineTo(0.5, -0.15); crossShape.lineTo(0.15, -0.15); crossShape.lineTo
 crossShape.lineTo(-0.15, -0.5); crossShape.lineTo(-0.15, -0.15); crossShape.lineTo(-0.5, -0.15);
 crossShape.lineTo(-0.5, 0.15); crossShape.lineTo(-0.15, 0.15); crossShape.lineTo(-0.15, 0.5);
 crossShape.closePath();
+
+const roundedStairsGeometry = (() => {
+  const geometries = [];
+  const steps = 16;
+  const innerR = 0.15;
+  const outerR = 0.5;
+  const totalHeight = 1;
+  const stepHeight = totalHeight / steps;
+  const angleStep = (Math.PI * 2 * 0.8) / steps;
+  
+  for (let i = 0; i < steps; i++) {
+    const stepShape = new THREE.Shape();
+    const overlapAngle = (angleStep * 1.5) / 2;
+    stepShape.absarc(0, 0, outerR, -overlapAngle, overlapAngle, false);
+    stepShape.absarc(0, 0, innerR, overlapAngle, -overlapAngle, true);
+    
+    const stepGeo = new THREE.ExtrudeGeometry(stepShape, {
+      depth: stepHeight * 1.2,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      steps: 1,
+      bevelSize: 0.005,
+      bevelThickness: 0.005
+    });
+    
+    stepGeo.rotateX(-Math.PI / 2);
+    stepGeo.rotateY(-(i * angleStep)); // curve downwards / upwards correctly
+    stepGeo.translate(0, (i * stepHeight) - (totalHeight / 2) + (stepHeight / 2), 0);
+    geometries.push(stepGeo);
+  }
+  
+  const merged = BufferGeometryUtils.mergeGeometries(geometries);
+  merged.computeVertexNormals();
+  return merged;
+})();
 
 const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.02, bevelThickness: 0.02 };
 
@@ -134,6 +170,7 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
         ]} />
       );
       case 'roundRoof': return <cylinderGeometry args={[0.5, 0.5, 1, 32, 1, false, 0, Math.PI]} />;
+      case 'roundedStairs': return <primitive object={roundedStairsGeometry} attach="geometry" />;
       case 'paraboloid': return (
         <latheGeometry args={[
           (() => {
@@ -148,6 +185,16 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
           32
         ]} />
       );
+      case 'drawing': {
+        if (!shape.drawPoints || shape.drawPoints.length < 3) return <boxGeometry />;
+        const drawShape = new THREE.Shape();
+        drawShape.moveTo(shape.drawPoints[0][0], shape.drawPoints[0][1]);
+        for (let i = 1; i < shape.drawPoints.length; i++) {
+          drawShape.lineTo(shape.drawPoints[i][0], shape.drawPoints[i][1]);
+        }
+        drawShape.closePath();
+        return <extrudeGeometry args={[drawShape, { depth: 0.3, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.015, bevelThickness: 0.015 }]} />;
+      }
       default: return <boxGeometry />;
     }
   };

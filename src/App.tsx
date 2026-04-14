@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Scene from './components/Scene';
 import MobileToolbar from './components/MobileToolbar';
+import DrawingCanvas from './components/DrawingCanvas';
 import { ShapeData, ShapeType, GroupData } from './types';
 import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
 import { useIsMobile } from './hooks/useMobile';
@@ -76,6 +77,7 @@ export default function App() {
   const [resetCameraFlag, setResetCameraFlag] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [useShaders, setUseShaders] = useState(() => localStorage.getItem('3d-studio-shaders') !== 'false');
+  const [isDrawing, setIsDrawing] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('3d-studio-shaders', String(useShaders));
@@ -482,6 +484,27 @@ export default function App() {
 
   const handleResetCamera = useCallback(() => { setResetCameraFlag(f => f+1); showToast('Camera reset'); }, [showToast]);
 
+  const handleDraw = useCallback(() => {
+    setIsDrawing(true);
+  }, []);
+
+  const handleDrawingDone = useCallback((points: [number, number][]) => {
+    setIsDrawing(false);
+    if (points.length < 3) return;
+    const newShape: ShapeData = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: 'drawing',
+      position: [0, 0.5, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+      drawPoints: points,
+    };
+    setShapes(prev => [...prev, newShape]);
+    setSelectedIds(new Set([newShape.id]));
+    showToast('Фигура создана!');
+  }, [showToast]);
+
   // ─── Keyboard shortcuts (desktop only) ───
   useEffect(() => {
     if (isMobile) return;
@@ -537,6 +560,7 @@ export default function App() {
           onToggleGroupCollapse={handleToggleGroupCollapse}
           onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
           onResetCamera={handleResetCamera}
+          onDraw={handleDraw}
         />
       )}
 
@@ -581,6 +605,16 @@ export default function App() {
             onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
             onResetCamera={handleResetCamera}
             onSave={handleSaveProject} onLoad={handleLoadProject}
+            onDraw={handleDraw}
+          />
+        )}
+
+        {/* Drawing Canvas Overlay */}
+        {isDrawing && (
+          <DrawingCanvas
+            onDone={handleDrawingDone}
+            onCancel={() => setIsDrawing(false)}
+            theme={theme}
           />
         )}
 
