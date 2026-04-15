@@ -5,7 +5,7 @@ import {
   Heart, ArrowUp, Plus, MousePointer, Undo2, Redo2, Menu, X,
   Download, Upload, Home, Grid, Magnet, Copy, Clipboard,
   Scissors, FolderPlus, Type, Layers, ChevronDown, ChevronRight, Ungroup, Palette,
-  Sun, Moon, Settings, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen
+  Sun, Moon, Settings, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen, Minus
 } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { TransformMode } from '../App';
@@ -35,6 +35,8 @@ interface MobileToolbarProps {
   onCopy: () => void;
   onPaste: () => void;
   onDuplicate: () => void;
+  onToggleHole: () => void;
+  onBooleanSubtract: () => void;
   onCreateGroup: () => void;
   onUngroup: (groupId: string) => void;
   onToggleGroupCollapse: (groupId: string) => void;
@@ -73,16 +75,51 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   image: <ImageIcon size={20} />,
   hemisphere: <Circle size={20} className="clip-path-half" />,
   pipe: <CircleDashed size={20} style={{ strokeWidth: 3 }} />,
+  elbowPipe: <RotateCw size={20} />,
   roundRoof: <Square size={20} className="rounded-t-full" />,
   paraboloid: <Triangle size={20} className="scale-y-125" />,
   roundedStairs: <AlignEndHorizontal size={20} />,
   drawing: <Pen size={20} />,
+  customMesh: <Box size={20} />,
+};
+
+const SHAPE_LABELS: Record<ShapeType, string> = {
+  box: 'box',
+  sphere: 'sphere',
+  cylinder: 'cyl',
+  cone: 'cone',
+  torus: 'torus',
+  pyramid: 'pyr',
+  capsule: 'cap',
+  octahedron: 'octa',
+  dodecahedron: 'dode',
+  prism: 'prism',
+  icosahedron: 'icosa',
+  tetrahedron: 'tetra',
+  torusKnot: 'knot',
+  ring: 'ring',
+  plane: 'plane',
+  circle: 'circle',
+  star: 'star',
+  heart: 'heart',
+  arrow: 'arrow',
+  cross: 'cross',
+  text: 'text',
+  image: 'image',
+  hemisphere: 'hemi',
+  pipe: 'pipe',
+  elbowPipe: 'elbow',
+  roundRoof: 'roof',
+  paraboloid: 'para',
+  roundedStairs: 'stair',
+  drawing: 'draw',
+  customMesh: 'mesh',
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
   'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
-  'hemisphere', 'pipe', 'roundRoof', 'paraboloid', 'roundedStairs'
+  'hemisphere', 'pipe', 'elbowPipe', 'roundRoof', 'paraboloid', 'roundedStairs'
 ];
 
 type MobilePanel = 'none' | 'shapes' | 'hierarchy' | 'properties';
@@ -91,7 +128,7 @@ export default function MobileToolbar({
   shapes, groups, selectedIds, snapToGrid, smartSnap, transformMode, clipboard,
   canUndo, canRedo, onUndo, onRedo,
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
-  onDeleteSelected, onCopy, onPaste, onDuplicate,
+  onDeleteSelected, onCopy, onPaste, onDuplicate, onToggleHole, onBooleanSubtract,
   onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera,
   onSave, onLoad, theme, onToggleTheme, onDraw
 }: MobileToolbarProps) {
@@ -104,6 +141,9 @@ export default function MobileToolbar({
 
   const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
+  const selectedShapes = shapes.filter(shape => selectedIds.has(shape.id));
+  const hasHoleSelection = selectedShapes.some(shape => shape.isHole);
+  const canBooleanSubtract = hasHoleSelection && selectedShapes.some(shape => !shape.isHole);
 
   const togglePanel = (panel: MobilePanel) => {
     setActivePanel(prev => prev === panel ? 'none' : panel);
@@ -226,6 +266,22 @@ export default function MobileToolbar({
                   <button onClick={onDuplicate}
                     className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 text-purple-400">
                     <Scissors size={14} />
+                  </button>
+                  <button
+                    onClick={onToggleHole}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 ${
+                      hasHoleSelection ? 'text-orange-400' : 'text-cyan-400'
+                    }`}
+                  >
+                    <CircleDashed size={14} />
+                  </button>
+                  <button
+                    onClick={onBooleanSubtract}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 ${
+                      canBooleanSubtract ? 'text-amber-300' : 'text-white/50'
+                    }`}
+                  >
+                    <Minus size={14} />
                   </button>
                   {selectedIds.size >= 2 && (
                     <button onClick={onCreateGroup}
@@ -376,7 +432,7 @@ export default function MobileToolbar({
                         className="flex flex-col items-center justify-center p-3 border border-gray-800 dark:border-[#E4E3E0]/15 rounded-xl active:scale-90 active:bg-cyan-500/20 active:border-cyan-500 transition-all"
                       >
                         {SHAPE_ICONS[type]}
-                        <span className="text-[7px] font-mono uppercase mt-1.5 opacity-50">{type}</span>
+                        <span className="text-[7px] font-mono uppercase mt-1.5 opacity-50">{SHAPE_LABELS[type]}</span>
                       </button>
                     ))}
                     {/* Draw custom shape */}
@@ -450,7 +506,7 @@ export default function MobileToolbar({
                                   <div className="flex items-center gap-2">
                                     {SHAPE_ICONS[shape.type]}
                                     <span className="uppercase text-[10px] font-mono">
-                                      {shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}
+                                      {shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}{shape.isHole ? '_hole' : ''}
                                     </span>
                                   </div>
                                   <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
@@ -476,7 +532,7 @@ export default function MobileToolbar({
                       <div className="flex items-center gap-3">
                         {SHAPE_ICONS[shape.type]}
                         <span className="uppercase text-[10px] font-mono">
-                          {shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}
+                          {shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}{shape.isHole ? '_hole' : ''}
                         </span>
                       </div>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
@@ -637,6 +693,22 @@ export default function MobileToolbar({
                         }`}
                         style={{ backgroundColor: c }} />
                     ))}
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2 opacity-70 font-mono text-[10px]">
+                      <CircleDashed size={12} /><span>ROLE</span>
+                    </div>
+                    <button
+                      onClick={() => onUpdate(selectedShape.id, { isHole: !selectedShape.isHole })}
+                      className={`w-full p-3 rounded-xl border transition-all font-mono text-xs uppercase tracking-wider ${
+                        selectedShape.isHole
+                          ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                          : 'border-black/10 dark:border-[#E4E3E0]/20'
+                      }`}
+                    >
+                      {selectedShape.isHole ? 'Hole shape' : 'Solid shape'}
+                    </button>
                   </div>
                 </div>
               )}

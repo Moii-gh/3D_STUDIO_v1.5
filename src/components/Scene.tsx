@@ -6,7 +6,8 @@ import { SnapGuide } from '../smartSnap';
 import * as THREE from 'three';
 import { TransformMode } from '../App';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon, Wand2 } from 'lucide-react';
+import { Download, Upload, ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Sun, Moon, Wand2, Box, MousePointer, Move, RotateCw, Maximize, Package } from 'lucide-react';
+import { geometryFromData } from '../geometryUtils';
 
 import { ShapeType } from '../types';
 
@@ -36,7 +37,16 @@ interface SceneProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onFirstPersonChange?: (active: boolean) => void;
   onClearGuides: () => void;
+}
+
+type FpsTool = 'build' | 'select' | 'move' | 'rotate' | 'scale';
+
+interface FpsBlockDefinition {
+  type: ShapeType;
+  label: string;
+  color: string;
 }
 
 // ═══ Custom shapes ═══
@@ -106,6 +116,13 @@ const roundedStairsGeometry = (() => {
 
 const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.02, bevelThickness: 0.02 };
 
+function getEffectiveRotation(shape: ShapeData): [number, number, number] {
+  if (shape.type === 'roundRoof') {
+    return [shape.rotation[0], shape.rotation[1], shape.rotation[2] + Math.PI / 2];
+  }
+  return shape.rotation;
+}
+
 
 
 // ═══ Shape component ═══
@@ -119,10 +136,16 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
     return null;
   }, [shape.type, shape.imageUrl]);
 
+  const customGeometry = useMemo(() => {
+    if (shape.type !== 'customMesh' || !shape.geometryData) return null;
+    return geometryFromData(shape.geometryData);
+  }, [shape.geometryData, shape.type]);
+
   if (shape.type === 'text') {
     return (
       <group position={shape.position} rotation={shape.rotation} scale={shape.scale}>
         <Text ref={meshRef as any}
+          userData={{ shapeId: shape.id, isSceneShape: true }}
           font="https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf"
           fontSize={0.5} color={shape.color} anchorX="center" anchorY="middle"
           outlineWidth={isSelected ? 0.02 : 0} outlineColor="#E4E3E0"
@@ -169,6 +192,7 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
           { depth: 1, bevelEnabled: false }
         ]} />
       );
+      case 'elbowPipe': return <torusGeometry args={[0.35, 0.15, 16, 64, Math.PI / 2]} />;
       case 'roundRoof': return <cylinderGeometry args={[0.5, 0.5, 1, 32, 1, false, 0, Math.PI]} />;
       case 'roundedStairs': return <primitive object={roundedStairsGeometry} attach="geometry" />;
       case 'paraboloid': return (
@@ -195,29 +219,35 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
         drawShape.closePath();
         return <extrudeGeometry args={[drawShape, { depth: 0.3, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.015, bevelThickness: 0.015 }]} />;
       }
+      case 'customMesh':
+        return customGeometry ? <primitive object={customGeometry} attach="geometry" /> : <boxGeometry />;
       default: return <boxGeometry />;
     }
   };
 
-  const isTransparent = (shape.opacity !== undefined && shape.opacity < 1);
+  const isHole = Boolean(shape.isHole);
+  const isTransparent = isHole || (shape.opacity !== undefined && shape.opacity < 1);
+  const displayOpacity = isHole ? Math.min(shape.opacity ?? 1, 0.35) : (shape.opacity ?? 1);
+  const displayColor = isHole ? '#f97316' : (shape.type === 'image' && shape.imageUrl ? '#ffffff' : shape.color);
 
   return (
-    <mesh ref={meshRef} position={shape.position} rotation={shape.type === 'roundRoof' ? [shape.rotation[0], shape.rotation[1], shape.rotation[2] + Math.PI / 2] : shape.rotation} scale={shape.scale}
+    <mesh ref={meshRef} userData={{ shapeId: shape.id, isSceneShape: true }} position={shape.position} rotation={getEffectiveRotation(shape)} scale={shape.scale}
       onClick={(e) => { e.stopPropagation(); onSelect(e); }}>
       {renderGeometry()}
       <meshStandardMaterial 
-        color={shape.type === 'image' && shape.imageUrl ? '#ffffff' : shape.color}
+        color={displayColor}
         map={texture || undefined}
         roughness={useShaders ? 0.2 : 1.0} 
         metalness={useShaders ? 0.8 : 0.0}
-        emissive={isSelected ? shape.color : '#000000'} emissiveIntensity={isSelected ? 0.5 : 0}
+        emissive={isHole ? '#f97316' : (isSelected ? shape.color : '#000000')} emissiveIntensity={isHole ? 0.2 : (isSelected ? 0.5 : 0)}
         side={THREE.DoubleSide}
+        wireframe={isHole}
         transparent={isTransparent}
-        opacity={shape.opacity ?? 1} />
+        opacity={displayOpacity} />
       {isSelected && (
-        <mesh scale={[1.1, 1.1, 1.1]} rotation={shape.type === 'roundRoof' ? [0, 0, Math.PI / 2] : [0,0,0]}>
+        <mesh scale={[1.1, 1.1, 1.1]} rotation={[0,0,0]}>
           {renderGeometry()}
-          <meshBasicMaterial color="#E4E3E0" wireframe transparent opacity={0.3} />
+          <meshBasicMaterial color={isHole ? '#fb923c' : '#E4E3E0'} wireframe transparent opacity={0.3} />
         </mesh>
       )}
     </mesh>
@@ -246,33 +276,84 @@ function CameraExposer({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
 
 // ═══ Minecraft-like First Person Controller ═══
 const PLAYER_HEIGHT = 1.7;
-const GRAVITY = 0.015;
-const JUMP_FORCE = 0.18;
-const WALK_SPEED = 0.08;
+const GRAVITY = 24;
+const JUMP_FORCE = 7.5;
+const WALK_SPEED = 4.8;
+const SPRINT_SPEED = 7.8;
+const FLY_SPEED = 6.5;
+const FLY_SPRINT_SPEED = 10;
+const MAX_DELTA = 0.05;
 
-function FirstPersonController() {
+function FirstPersonController({
+  inventoryOpen,
+  onFlyingChange,
+}: {
+  inventoryOpen: boolean;
+  onFlyingChange: (flying: boolean) => void;
+}) {
   const { camera } = useThree();
-  const moveState = useRef({ forward: false, backward: false, left: false, right: false, jump: false });
+  const moveState = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+    ascend: false,
+    descend: false,
+  });
   const velocityY = useRef(0);
   const isGrounded = useRef(true);
+  const isFlying = useRef(false);
+  const lastSpacePress = useRef(0);
   const direction = useRef(new THREE.Vector3());
-  const frontVector = useRef(new THREE.Vector3());
-  const sideVector = useRef(new THREE.Vector3());
+  const forwardVector = useRef(new THREE.Vector3());
+  const rightVector = useRef(new THREE.Vector3());
+  const worldUp = useRef(new THREE.Vector3(0, 1, 0));
+
+  const setFlying = useCallback((next: boolean) => {
+    isFlying.current = next;
+    velocityY.current = 0;
+    if (!next && camera.position.y <= PLAYER_HEIGHT) {
+      camera.position.y = PLAYER_HEIGHT;
+      isGrounded.current = true;
+    }
+    onFlyingChange(next);
+  }, [camera, onFlyingChange]);
 
   useEffect(() => {
     camera.position.set(3, PLAYER_HEIGHT, 3);
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (inventoryOpen) return;
       switch (e.code) {
         case 'KeyW': moveState.current.forward = true; break;
         case 'KeyS': moveState.current.backward = true; break;
         case 'KeyA': moveState.current.left = true; break;
         case 'KeyD': moveState.current.right = true; break;
-        case 'Space': 
-          if (isGrounded.current) {
+        case 'ControlLeft':
+        case 'ControlRight':
+          moveState.current.descend = true;
+          break;
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          moveState.current.sprint = true;
+          break;
+        case 'Space': {
+          const now = performance.now();
+          const isDoubleTap = now - lastSpacePress.current < 280;
+          lastSpacePress.current = now;
+          if (isDoubleTap) {
+            setFlying(!isFlying.current);
+            moveState.current.ascend = !isFlying.current;
+            break;
+          }
+          if (isFlying.current) {
+            moveState.current.ascend = true;
+          } else if (isGrounded.current) {
             velocityY.current = JUMP_FORCE;
             isGrounded.current = false;
           }
           break;
+        }
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -281,6 +362,17 @@ function FirstPersonController() {
         case 'KeyS': moveState.current.backward = false; break;
         case 'KeyA': moveState.current.left = false; break;
         case 'KeyD': moveState.current.right = false; break;
+        case 'ControlLeft':
+        case 'ControlRight':
+          moveState.current.descend = false;
+          break;
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          moveState.current.sprint = false;
+          break;
+        case 'Space':
+          moveState.current.ascend = false;
+          break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -288,24 +380,74 @@ function FirstPersonController() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      onFlyingChange(false);
     };
-  }, [camera]);
+  }, [camera, inventoryOpen, onFlyingChange, setFlying]);
 
-  useFrame(() => {
-    // Horizontal movement (walk on ground plane)
-    frontVector.current.set(0, 0, Number(moveState.current.backward) - Number(moveState.current.forward));
-    sideVector.current.set(Number(moveState.current.left) - Number(moveState.current.right), 0, 0);
-    direction.current.subVectors(frontVector.current, sideVector.current).normalize().multiplyScalar(WALK_SPEED);
-    direction.current.applyEuler(new THREE.Euler(0, camera.rotation.y, 0, 'YXZ'));
+  useEffect(() => {
+    if (!inventoryOpen) return;
+    moveState.current.forward = false;
+    moveState.current.backward = false;
+    moveState.current.left = false;
+    moveState.current.right = false;
+    moveState.current.sprint = false;
+    moveState.current.ascend = false;
+    moveState.current.descend = false;
+  }, [inventoryOpen]);
 
-    camera.position.x += direction.current.x;
-    camera.position.z += direction.current.z;
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, MAX_DELTA);
+    if (inventoryOpen) return;
 
-    // Gravity
-    velocityY.current -= GRAVITY;
-    camera.position.y += velocityY.current;
+    camera.getWorldDirection(forwardVector.current);
+    if (isFlying.current) {
+      if (forwardVector.current.lengthSq() < 1e-6) {
+        forwardVector.current.set(0, 0, -1);
+      } else {
+        forwardVector.current.normalize();
+      }
+    } else {
+      forwardVector.current.y = 0;
+      if (forwardVector.current.lengthSq() < 1e-6) {
+        forwardVector.current.set(0, 0, -1);
+      } else {
+        forwardVector.current.normalize();
+      }
+    }
 
-    // Ground collision
+    rightVector.current.crossVectors(forwardVector.current, worldUp.current);
+    if (rightVector.current.lengthSq() < 1e-6) {
+      rightVector.current.set(1, 0, 0);
+    } else {
+      rightVector.current.normalize();
+    }
+    direction.current.set(0, 0, 0);
+
+    if (moveState.current.forward) direction.current.add(forwardVector.current);
+    if (moveState.current.backward) direction.current.sub(forwardVector.current);
+    if (moveState.current.right) direction.current.add(rightVector.current);
+    if (moveState.current.left) direction.current.sub(rightVector.current);
+    if (isFlying.current && moveState.current.ascend) direction.current.y += 1;
+    if (isFlying.current && moveState.current.descend) direction.current.y -= 1;
+
+    if (direction.current.lengthSq() > 0) {
+      const speed = isFlying.current
+        ? (moveState.current.sprint ? FLY_SPRINT_SPEED : FLY_SPEED)
+        : (moveState.current.sprint ? SPRINT_SPEED : WALK_SPEED);
+      direction.current.normalize().multiplyScalar(speed * dt);
+      camera.position.add(direction.current);
+    }
+
+    if (isFlying.current) {
+      if (camera.position.y < PLAYER_HEIGHT) {
+        camera.position.y = PLAYER_HEIGHT;
+      }
+      return;
+    }
+
+    velocityY.current -= GRAVITY * dt;
+    camera.position.y += velocityY.current * dt;
+
     if (camera.position.y <= PLAYER_HEIGHT) {
       camera.position.y = PLAYER_HEIGHT;
       velocityY.current = 0;
@@ -317,7 +459,15 @@ function FirstPersonController() {
 }
 
 // ═══ Minecraft Hand (visible in FPS mode) ═══
-function MinecraftHand({ activeBlock, useShaders }: { activeBlock: ShapeType; useShaders: boolean }) {
+function MinecraftHand({
+  activeTool,
+  activeBlock,
+  useShaders,
+}: {
+  activeTool: FpsTool;
+  activeBlock: ShapeType | null;
+  useShaders: boolean;
+}) {
   const handRef = useRef<THREE.Group>(null);
   const swingRef = useRef(0);
   const isSwinging = useRef(false);
@@ -357,7 +507,7 @@ function MinecraftHand({ activeBlock, useShaders }: { activeBlock: ShapeType; us
       box: '#8B6914', sphere: '#aaaaaa', cylinder: '#888888', cone: '#666666',
       pyramid: '#C2B280', torus: '#cc4444', capsule: '#44cc44',
     };
-    return colors[activeBlock] || '#8B6914';
+    return activeBlock ? (colors[activeBlock] || '#8B6914') : '#8B6914';
   }, [activeBlock]);
 
   return (
@@ -367,25 +517,112 @@ function MinecraftHand({ activeBlock, useShaders }: { activeBlock: ShapeType; us
         <boxGeometry args={[0.08, 0.08, 0.25]} />
         <meshStandardMaterial color="#D2A06C" roughness={0.8} />
       </mesh>
-      {/* Block in hand */}
-      <mesh position={[0, 0.05, -0.05]} rotation={[0.3, 0.5, 0]}>
-        <boxGeometry args={[0.12, 0.12, 0.12]} />
-        <meshStandardMaterial color={blockColor} roughness={useShaders ? 0.2 : 0.8} metalness={useShaders ? 0.5 : 0} />
-      </mesh>
+      {activeTool === 'build' ? (
+        <mesh position={[0, 0.05, -0.05]} rotation={[0.3, 0.5, 0]}>
+          <boxGeometry args={[0.12, 0.12, 0.12]} />
+          <meshStandardMaterial color={blockColor} roughness={useShaders ? 0.2 : 0.8} metalness={useShaders ? 0.5 : 0} />
+        </mesh>
+      ) : activeTool === 'select' ? (
+        <group position={[0.02, 0.05, -0.04]} rotation={[0.6, 0.35, 0]}>
+          <mesh position={[0, 0, 0.03]}>
+            <cylinderGeometry args={[0.018, 0.024, 0.18, 10]} />
+            <meshStandardMaterial color="#d1d5db" roughness={0.4} metalness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.06, -0.02]}>
+            <coneGeometry args={[0.03, 0.08, 10]} />
+            <meshStandardMaterial color="#38bdf8" roughness={0.2} metalness={0.6} />
+          </mesh>
+        </group>
+      ) : activeTool === 'move' ? (
+        <group position={[0.02, 0.06, -0.04]} rotation={[0.3, 0.5, 0]}>
+          <mesh>
+            <cylinderGeometry args={[0.02, 0.02, 0.18, 10]} />
+            <meshStandardMaterial color="#94a3b8" roughness={0.4} metalness={0.45} />
+          </mesh>
+          <mesh position={[0, 0.11, 0]}>
+            <coneGeometry args={[0.035, 0.08, 10]} />
+            <meshStandardMaterial color="#22c55e" roughness={0.2} metalness={0.5} />
+          </mesh>
+        </group>
+      ) : activeTool === 'rotate' ? (
+        <group position={[0.03, 0.04, -0.04]} rotation={[0.8, 0.2, 0.3]}>
+          <mesh>
+            <torusGeometry args={[0.07, 0.018, 10, 24]} />
+            <meshStandardMaterial color="#f59e0b" roughness={0.25} metalness={0.55} />
+          </mesh>
+          <mesh position={[0.07, 0.02, 0]}>
+            <coneGeometry args={[0.025, 0.06, 10]} />
+            <meshStandardMaterial color="#f97316" roughness={0.2} metalness={0.55} />
+          </mesh>
+        </group>
+      ) : (
+        <group position={[0.02, 0.03, -0.03]} rotation={[0.4, 0.55, 0.1]}>
+          <mesh>
+            <boxGeometry args={[0.16, 0.02, 0.02]} />
+            <meshStandardMaterial color="#cbd5e1" roughness={0.35} metalness={0.55} />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <boxGeometry args={[0.16, 0.02, 0.02]} />
+            <meshStandardMaterial color="#cbd5e1" roughness={0.35} metalness={0.55} />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 }
 
+function findShapeIdInObject(object: THREE.Object3D | null): string | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (typeof current.userData?.shapeId === 'string') {
+      return current.userData.shapeId as string;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 // ═══ Block placer (raycasts from camera for FPS placement) ═══
-function MinecraftBlockPlacer({ onPlace, activeBlock }: { onPlace: (type: ShapeType, pos: [number,number,number]) => void; activeBlock: ShapeType }) {
+function MinecraftBlockPlacer({
+  onPlace,
+  activeTool,
+  activeBlock,
+  inventoryOpen,
+  onSelectShape,
+}: {
+  onPlace: (type: ShapeType, pos: [number,number,number]) => void;
+  activeTool: FpsTool;
+  activeBlock: ShapeType | null;
+  inventoryOpen: boolean;
+  onSelectShape: (id: string | null) => void;
+}) {
   const { camera, scene } = useThree();
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (e.button !== 0) return; // left click only
+      if (inventoryOpen) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('button, input, textarea, select, a')) return;
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeHit = intersects.find((hit) => findShapeIdInObject(hit.object));
+
+      if (e.button === 2) {
+        e.preventDefault();
+        onSelectShape(shapeHit ? findShapeIdInObject(shapeHit.object) : null);
+        return;
+      }
+
+      if (e.button !== 0 || !document.pointerLockElement) return;
+
+      if (activeTool !== 'build') {
+        onSelectShape(shapeHit ? findShapeIdInObject(shapeHit.object) : null);
+        return;
+      }
+
+      if (!activeBlock) return;
+
       if (intersects.length > 0) {
         const hit = intersects[0];
         const normal = hit.face?.normal || new THREE.Vector3(0, 1, 0);
@@ -399,9 +636,15 @@ function MinecraftBlockPlacer({ onPlace, activeBlock }: { onPlace: (type: ShapeT
         onPlace(activeBlock, pos);
       }
     };
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, [camera, scene, onPlace, activeBlock]);
+
+    const preventContextMenu = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('contextmenu', preventContextMenu);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('contextmenu', preventContextMenu);
+    };
+  }, [camera, scene, onPlace, activeTool, activeBlock, inventoryOpen, onSelectShape]);
 
   return null;
 }
@@ -420,7 +663,46 @@ const HOTBAR_BLOCKS: { type: ShapeType; label: string; color: string }[] = [
   { type: 'star', label: 'Звезда', color: '#cccc44' },
 ];
 
-export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, theme, onToggleTheme, useShaders, onToggleShaders, onSelect, onUpdate, onGroupTransform, onMultiSelect, onAdd, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onClearGuides }: SceneProps) {
+const FPS_TOOLS: { id: FpsTool; label: string; hotkey: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { id: 'build', label: 'Build', hotkey: '1', icon: Box },
+  { id: 'select', label: 'Select', hotkey: '2', icon: MousePointer },
+  { id: 'move', label: 'Move', hotkey: '3', icon: Move },
+  { id: 'rotate', label: 'Rotate', hotkey: '4', icon: RotateCw },
+  { id: 'scale', label: 'Scale', hotkey: '5', icon: Maximize },
+];
+
+const FPS_BLOCK_LIBRARY: FpsBlockDefinition[] = [
+  { type: 'box', label: 'Box', color: '#8B6914' },
+  { type: 'sphere', label: 'Sphere', color: '#b4b4b4' },
+  { type: 'cylinder', label: 'Cylinder', color: '#8b8b8b' },
+  { type: 'cone', label: 'Cone', color: '#676767' },
+  { type: 'torus', label: 'Torus', color: '#cc4444' },
+  { type: 'pyramid', label: 'Pyramid', color: '#c2b280' },
+  { type: 'capsule', label: 'Capsule', color: '#44cc44' },
+  { type: 'octahedron', label: 'Octa', color: '#4488cc' },
+  { type: 'dodecahedron', label: 'Dodeca', color: '#8b5cf6' },
+  { type: 'prism', label: 'Prism', color: '#f97316' },
+  { type: 'icosahedron', label: 'Icosa', color: '#14b8a6' },
+  { type: 'tetrahedron', label: 'Tetra', color: '#ef4444' },
+  { type: 'torusKnot', label: 'Knot', color: '#ec4899' },
+  { type: 'ring', label: 'Ring', color: '#f59e0b' },
+  { type: 'plane', label: 'Plane', color: '#94a3b8' },
+  { type: 'circle', label: 'Circle', color: '#cbd5e1' },
+  { type: 'star', label: 'Star', color: '#fde047' },
+  { type: 'heart', label: 'Heart', color: '#fb7185' },
+  { type: 'arrow', label: 'Arrow', color: '#38bdf8' },
+  { type: 'cross', label: 'Cross', color: '#f87171' },
+  { type: 'hemisphere', label: 'Hemi', color: '#60a5fa' },
+  { type: 'pipe', label: 'Pipe', color: '#22c55e' },
+  { type: 'elbowPipe', label: 'Elbow', color: '#10b981' },
+  { type: 'roundRoof', label: 'Roof', color: '#d97706' },
+  { type: 'paraboloid', label: 'Parab', color: '#a855f7' },
+  { type: 'roundedStairs', label: 'Stairs', color: '#f97316' },
+];
+
+const FPS_DEFAULT_BLOCK_SLOTS: ShapeType[] = ['box', 'sphere', 'cylinder', 'cone'];
+
+export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, smartSnap, activeGuides, resetCameraFlag, historyLength, historyIndex, isMobile, theme, onToggleTheme, useShaders, onToggleShaders, onSelect, onUpdate, onGroupTransform, onMultiSelect, onAdd, onSave, onLoad, onUndo, onRedo, canUndo, canRedo, onFirstPersonChange, onClearGuides }: SceneProps) {
   const orbitRef = useRef<any>(null);
   const transformRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -429,25 +711,66 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
   // FPS Mode (desktop only)
   const [isFirstPerson, setIsFirstPerson] = useState(false);
-  const [fpsActiveSlot, setFpsActiveSlot] = useState(0);
+  const [fpsActiveTool, setFpsActiveTool] = useState<FpsTool>('build');
+  const [fpsBlockSlots, setFpsBlockSlots] = useState<ShapeType[]>(FPS_DEFAULT_BLOCK_SLOTS);
+  const [fpsActiveBlockSlot, setFpsActiveBlockSlot] = useState(0);
+  const [fpsInventoryOpen, setFpsInventoryOpen] = useState(false);
+  const [fpsFlying, setFpsFlying] = useState(false);
   // Settings Mode
   const [showSettings, setShowSettings] = useState(false);
 
   // Marquee state (desktop only)
   const [marquee, setMarquee] = useState<{ sx: number; sy: number; ex: number; ey: number } | null>(null);
 
-  // FPS hotbar scroll + number keys
+  const activeBlockType = fpsBlockSlots[fpsActiveBlockSlot] ?? null;
+  const activeBlockMeta = activeBlockType
+    ? (FPS_BLOCK_LIBRARY.find((block) => block.type === activeBlockType) ?? null)
+    : null;
+
+  // FPS tools + hotbar + inventory
   useEffect(() => {
     if (!isFirstPerson) return;
     const handleWheel = (e: WheelEvent) => {
-      setFpsActiveSlot(prev => {
+      if (fpsInventoryOpen) return;
+      setFpsActiveBlockSlot((prev) => {
         const next = prev + (e.deltaY > 0 ? 1 : -1);
-        return ((next % HOTBAR_BLOCKS.length) + HOTBAR_BLOCKS.length) % HOTBAR_BLOCKS.length;
+        return ((next % fpsBlockSlots.length) + fpsBlockSlots.length) % fpsBlockSlots.length;
       });
+      setFpsActiveTool('build');
     };
     const handleKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (isInput) return;
+
+      if (e.code === 'KeyE') {
+        e.preventDefault();
+        setFpsInventoryOpen((prev) => {
+          const next = !prev;
+          if (next) {
+            document.exitPointerLock?.();
+          }
+          return next;
+        });
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setFpsInventoryOpen(false);
+        return;
+      }
+
       const n = parseInt(e.key);
-      if (n >= 1 && n <= HOTBAR_BLOCKS.length) setFpsActiveSlot(n - 1);
+      if (Number.isNaN(n)) return;
+      if (n >= 1 && n <= FPS_TOOLS.length) {
+        setFpsActiveTool(FPS_TOOLS[n - 1].id);
+        return;
+      }
+      const blockIndex = n - FPS_TOOLS.length - 1;
+      if (blockIndex >= 0 && blockIndex < fpsBlockSlots.length) {
+        setFpsActiveBlockSlot(blockIndex);
+        setFpsActiveTool('build');
+      }
     };
     window.addEventListener('wheel', handleWheel);
     window.addEventListener('keydown', handleKey);
@@ -455,7 +778,17 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('keydown', handleKey);
     };
+  }, [isFirstPerson, fpsInventoryOpen, fpsBlockSlots.length]);
+
+  useEffect(() => {
+    if (isFirstPerson) return;
+    setFpsInventoryOpen(false);
+    setFpsFlying(false);
   }, [isFirstPerson]);
+
+  useEffect(() => {
+    onFirstPersonChange?.(isFirstPerson);
+  }, [isFirstPerson, onFirstPersonChange]);
 
   const handleFpsPlace = useCallback((type: ShapeType, pos: [number, number, number]) => {
     onAdd(type, pos);
@@ -508,6 +841,92 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
   const showGizmo = selectedShape && transformMode !== 'select';
+  const activeToolMeta = FPS_TOOLS.find((tool) => tool.id === fpsActiveTool) ?? FPS_TOOLS[0];
+
+  const handleFpsObjectTransform = useCallback((code: string, boost: boolean) => {
+    if (!isFirstPerson || isMobile || fpsInventoryOpen || !selectedShape || !primarySelectedId || !cameraRef.current) {
+      return false;
+    }
+
+    const camera = cameraRef.current;
+    const moveStep = boost ? (snapToGrid ? 1 : 0.75) : (snapToGrid ? 0.5 : 0.25);
+    const verticalStep = moveStep;
+    const rotationStep = boost ? Math.PI / 4 : (snapToGrid ? Math.PI / 8 : Math.PI / 18);
+    const scaleFactor = boost ? 1.25 : 1.1;
+    const minScale = 0.1;
+
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-6) {
+      forward.set(0, 0, -1);
+    } else {
+      forward.normalize();
+    }
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const nextPosition = new THREE.Vector3(...selectedShape.position);
+
+    switch (code) {
+      case 'ArrowUp':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.add(forward.multiplyScalar(moveStep));
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'ArrowDown':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.add(forward.multiplyScalar(-moveStep));
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'ArrowRight':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.add(right.multiplyScalar(moveStep));
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'ArrowLeft':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.add(right.multiplyScalar(-moveStep));
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'PageUp':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.y += verticalStep;
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'PageDown':
+        if (fpsActiveTool !== 'move') return false;
+        nextPosition.y -= verticalStep;
+        onGroupTransform(primarySelectedId, { position: [nextPosition.x, nextPosition.y, nextPosition.z] });
+        return true;
+      case 'BracketLeft':
+        if (fpsActiveTool !== 'rotate') return false;
+        onGroupTransform(primarySelectedId, {
+          rotation: [selectedShape.rotation[0], selectedShape.rotation[1] - rotationStep, selectedShape.rotation[2]],
+        });
+        return true;
+      case 'BracketRight':
+        if (fpsActiveTool !== 'rotate') return false;
+        onGroupTransform(primarySelectedId, {
+          rotation: [selectedShape.rotation[0], selectedShape.rotation[1] + rotationStep, selectedShape.rotation[2]],
+        });
+        return true;
+      case 'Minus':
+      case 'NumpadSubtract':
+        if (fpsActiveTool !== 'scale') return false;
+        onGroupTransform(primarySelectedId, {
+          scale: selectedShape.scale.map((value) => Math.max(minScale, value / scaleFactor)) as [number, number, number],
+        });
+        return true;
+      case 'Equal':
+      case 'NumpadAdd':
+        if (fpsActiveTool !== 'scale') return false;
+        onGroupTransform(primarySelectedId, {
+          scale: selectedShape.scale.map((value) => value * scaleFactor) as [number, number, number],
+        });
+        return true;
+      default:
+        return false;
+    }
+  }, [isFirstPerson, isMobile, fpsInventoryOpen, selectedShape, primarySelectedId, snapToGrid, fpsActiveTool, onGroupTransform]);
 
   const handleTransformChange = () => {
     if (transformRef.current?.object && primarySelectedId) {
@@ -520,6 +939,20 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
     }
     setTimeout(() => onClearGuides(), 300);
   };
+
+  useEffect(() => {
+    if (!isFirstPerson || isMobile || fpsInventoryOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (isInput) return;
+      if (handleFpsObjectTransform(e.code, e.shiftKey)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isFirstPerson, isMobile, fpsInventoryOpen, handleFpsObjectTransform]);
 
   // ═══ Marquee selection handlers (desktop only) ═══
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -598,9 +1031,15 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
         <PerspectiveCamera makeDefault position={[5, 5, 5]} />
         {!isMobile && isFirstPerson ? (
           <>
-            <FirstPersonController />
-            <MinecraftHand activeBlock={HOTBAR_BLOCKS[fpsActiveSlot].type} useShaders={useShaders} />
-            <MinecraftBlockPlacer onPlace={handleFpsPlace} activeBlock={HOTBAR_BLOCKS[fpsActiveSlot].type} />
+            <FirstPersonController inventoryOpen={fpsInventoryOpen} onFlyingChange={setFpsFlying} />
+            <MinecraftHand activeTool={fpsActiveTool} activeBlock={activeBlockType} useShaders={useShaders} />
+            <MinecraftBlockPlacer
+              onPlace={handleFpsPlace}
+              activeTool={fpsActiveTool}
+              activeBlock={activeBlockType}
+              inventoryOpen={fpsInventoryOpen}
+              onSelectShape={(id) => onSelect(id)}
+            />
           </>
         ) : (
           <OrbitControls
@@ -743,9 +1182,18 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
           {/* FPS hint */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
             <div className="bg-black/50 backdrop-blur px-4 py-1.5 rounded font-mono text-[10px] text-white/60 uppercase tracking-widest">
-              WASD — ходить · Пробел — прыгать · ЛКМ — поставить блок · 1-9 — слот · ESC — выйти
+              WASD/SHIFT — ходить · ПРОБЕЛ — прыгать · ЛКМ — блок · ПКМ — выбрать · СТРЕЛКИ/PGUP/PGDN — двигать · +/- — размер · [ ] — поворот
             </div>
           </div>
+
+          {selectedShape && (
+            <div className="absolute top-20 left-6 z-20 pointer-events-none">
+              <div className="bg-black/55 backdrop-blur px-4 py-2 rounded font-mono text-[10px] text-white/70 uppercase tracking-widest">
+                <div className="mb-1 opacity-50">FPS Edit Target</div>
+                <div className="text-cyan-300">{selectedShape.type}_{selectedShape.id.slice(0, 4)}</div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

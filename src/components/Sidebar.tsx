@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen } from 'lucide-react';
+import { Box, Circle, Cylinder, Cone, Trash2, RotateCw, Move, Maximize, Palette, Pill, Diamond, Hexagon, Triangle, Layers, Grid, Type, Globe, Command, CircleDashed, Square, Star, Heart, ArrowUp, Plus, Copy, Clipboard, FolderPlus, Ungroup, ChevronDown, ChevronRight, MousePointer, Home, Scissors, Undo2, Redo2, ChevronsDown, ChevronsUp, Magnet, Image as ImageIcon, Upload as UploadIcon, AlignEndHorizontal, Pen, Minus } from 'lucide-react';
 import { ShapeData, ShapeType, GroupData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformMode } from '../App';
@@ -28,6 +28,8 @@ interface SidebarProps {
   onCopy: () => void;
   onPaste: () => void;
   onDuplicate: () => void;
+  onToggleHole: () => void;
+  onBooleanSubtract: () => void;
   onCreateGroup: () => void;
   onUngroup: (groupId: string) => void;
   onToggleGroupCollapse: (groupId: string) => void;
@@ -62,27 +64,65 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   image: <ImageIcon size={18} />,
   hemisphere: <Circle size={18} className="clip-path-half" />,
   pipe: <CircleDashed size={18} style={{ strokeWidth: 3 }} />,
+  elbowPipe: <RotateCw size={18} />,
   roundRoof: <Square size={18} className="rounded-t-full" />,
   paraboloid: <Triangle size={18} className="scale-y-125" />,
   roundedStairs: <AlignEndHorizontal size={18} />,
   drawing: <Pen size={18} />,
+  customMesh: <Box size={18} />,
+};
+
+const SHAPE_LABELS: Record<ShapeType, string> = {
+  box: 'BOX',
+  sphere: 'SPHERE',
+  cylinder: 'CYL',
+  cone: 'CONE',
+  torus: 'TORUS',
+  pyramid: 'PYR',
+  capsule: 'CAP',
+  octahedron: 'OCTA',
+  dodecahedron: 'DODE',
+  prism: 'PRISM',
+  icosahedron: 'ICOSA',
+  tetrahedron: 'TETRA',
+  torusKnot: 'KNOT',
+  ring: 'RING',
+  plane: 'PLANE',
+  circle: 'CIRCLE',
+  star: 'STAR',
+  heart: 'HEART',
+  arrow: 'ARROW',
+  cross: 'CROSS',
+  text: 'TEXT',
+  image: 'IMAGE',
+  hemisphere: 'HEMI',
+  pipe: 'PIPE',
+  elbowPipe: 'ELBOW',
+  roundRoof: 'ROOF',
+  paraboloid: 'PARA',
+  roundedStairs: 'STAIR',
+  drawing: 'DRAW',
+  customMesh: 'MESH',
 };
 
 const ALL_SHAPES: ShapeType[] = [
   'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
   'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
-  'hemisphere', 'pipe', 'roundRoof', 'paraboloid', 'roundedStairs'
+  'hemisphere', 'pipe', 'elbowPipe', 'roundRoof', 'paraboloid', 'roundedStairs'
 ];
 
 export default function Sidebar({
   shapes, groups, selectedIds, snapToGrid, smartSnap, transformMode, clipboard,
   canUndo, canRedo, onUndo, onRedo,
   onToggleSnap, onToggleSmartSnap, onChangeTransformMode, onSelect, onSelectAll, onAdd, onUpdate, onDelete,
-  onDeleteSelected, onCopy, onPaste, onDuplicate,
+  onDeleteSelected, onCopy, onPaste, onDuplicate, onToggleHole, onBooleanSubtract,
   onCreateGroup, onUngroup, onToggleGroupCollapse, onSelectGroup, onRenameGroup, onResetCamera, onDraw
 }: SidebarProps) {
   const primarySelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const selectedShape = primarySelectedId ? shapes.find(s => s.id === primarySelectedId) : null;
+  const selectedShapes = shapes.filter(shape => selectedIds.has(shape.id));
+  const hasHoleSelection = selectedShapes.some(shape => shape.isHole);
+  const canBooleanSubtract = hasHoleSelection && selectedShapes.some(shape => !shape.isHole);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState('');
   const [propsCollapsed, setPropsCollapsed] = useState(false);
@@ -177,6 +217,7 @@ export default function Sidebar({
               title={`Add ${type}`}
             >
               {SHAPE_ICONS[type]}
+              <span className="mt-1 text-[7px] uppercase opacity-60 leading-none">{SHAPE_LABELS[type]}</span>
             </button>
           ))}
           {/* Special: Draw custom shape */}
@@ -195,6 +236,8 @@ export default function Sidebar({
           <ActionButton icon={<Copy size={14} />} label="COPY" onClick={onCopy} tooltip="Copy (Ctrl+C)" />
           <ActionButton icon={<Clipboard size={14} />} label="PASTE" onClick={onPaste} tooltip="Paste (Ctrl+V)" />
           <ActionButton icon={<Scissors size={14} />} label="DUP" onClick={onDuplicate} tooltip="Duplicate (Ctrl+D)" />
+          <ActionButton icon={<CircleDashed size={14} />} label="HOLE" onClick={onToggleHole} tooltip="Toggle hole mode for selection" highlight={hasHoleSelection} />
+          <ActionButton icon={<Minus size={14} />} label="BOOL" onClick={onBooleanSubtract} tooltip="Subtract holes from solids" highlight={canBooleanSubtract} />
           <ActionButton icon={<FolderPlus size={14} />} label="GROUP" onClick={onCreateGroup} tooltip="Create Group (Ctrl+G)" />
           <ActionButton icon={<Home size={14} />} label="HOME" onClick={onResetCamera} tooltip="Reset Camera (H)" />
         </div>
@@ -286,7 +329,7 @@ export default function Sidebar({
                         }`}>
                         <div className="flex items-center gap-2">
                           {SHAPE_ICONS[shape.type]}
-                          <span className="uppercase text-[10px]">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}</span>
+                          <span className="uppercase text-[10px]">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}{shape.isHole ? '_HOLE' : ''}</span>
                         </div>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
                           className="opacity-50 hover:opacity-100 hover:text-red-500 transition-opacity">
@@ -308,7 +351,7 @@ export default function Sidebar({
             }`}>
             <div className="flex items-center gap-3">
               {SHAPE_ICONS[shape.type]}
-              <span className="uppercase">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}</span>
+              <span className="uppercase">{shape.type === 'text' ? `"${shape.text?.slice(0,4)}"` : `${shape.type}_${shape.id.slice(0, 4)}`}{shape.isHole ? '_HOLE' : ''}</span>
             </div>
             <button onClick={(e) => { e.stopPropagation(); onDelete(shape.id); }}
               className="opacity-50 hover:opacity-100 hover:text-red-500 transition-opacity">
@@ -350,7 +393,7 @@ export default function Sidebar({
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-6 pb-6 space-y-5">
+                  <div className="max-h-[45vh] overflow-y-auto px-6 pb-6 pr-4 space-y-5 overscroll-contain">
 
                     {selectedShape.type === 'text' && (
                       <div>
@@ -461,6 +504,20 @@ export default function Sidebar({
                           className="flex-1 accent-cyan-500" />
                         <span className="w-12 text-right">{Math.round((selectedShape.opacity ?? 1) * 100)}%</span>
                       </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 opacity-70"><CircleDashed size={12} /><span>BOOLEAN_ROLE</span></div>
+                      <button
+                        onClick={() => onUpdate(selectedShape.id, { isHole: !selectedShape.isHole })}
+                        className={`w-full p-2 rounded border transition-colors ${
+                          selectedShape.isHole
+                            ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                            : 'border-black/10 dark:border-[#E4E3E0]/20 hover:bg-gray-200 dark:hover:bg-[#E4E3E0] hover:text-black dark:hover:text-[#141414]'
+                        }`}
+                        >
+                          {selectedShape.isHole ? 'HOLE SHAPE' : 'SOLID SHAPE'}
+                        </button>
                     </div>
                   </div>
                 </motion.div>

@@ -7,6 +7,7 @@ import { ShapeData, ShapeType, GroupData } from './types';
 import { computeSmartSnap, SnapResult, SnapGuide, getShapeBBox } from './smartSnap';
 import { useIsMobile } from './hooks/useMobile';
 import { useTheme } from './hooks/useTheme';
+import { isBooleanShapeSupported, subtractShapes } from './booleanOps';
 import * as THREE from 'three';
 
 export type TransformMode = 'select' | 'translate' | 'rotate' | 'scale';
@@ -78,6 +79,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [useShaders, setUseShaders] = useState(() => localStorage.getItem('3d-studio-shaders') !== 'false');
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isFirstPersonMode, setIsFirstPersonMode] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('3d-studio-shaders', String(useShaders));
@@ -482,6 +484,66 @@ export default function App() {
     showToast(`Duplicated ${newShapes.length} entities`);
   }, [selectedIds, shapes, groups, showToast]);
 
+  const handleToggleHole = useCallback(() => {
+    if (selectedIds.size === 0) {
+      showToast('Select objects first');
+      return;
+    }
+
+    const selectedShapes = shapes.filter(shape => selectedIds.has(shape.id));
+    const makeHole = !selectedShapes.every(shape => shape.isHole);
+    setShapes(prev => prev.map(shape => (
+      selectedIds.has(shape.id)
+        ? { ...shape, isHole: makeHole }
+        : shape
+    )));
+    showToast(makeHole ? `Marked ${selectedIds.size} as HOLE` : 'Hole mode disabled');
+  }, [selectedIds, shapes, showToast]);
+
+  const handleBooleanSubtract = useCallback(() => {
+    if (selectedIds.size < 2) {
+      showToast('Select solids and hole shapes');
+      return;
+    }
+
+    const selectedShapes = shapes.filter(shape => selectedIds.has(shape.id));
+    const unsupported = selectedShapes.filter(shape => !isBooleanShapeSupported(shape));
+    if (unsupported.length > 0) {
+      showToast(`Boolean unsupported: ${unsupported[0].type}`);
+      return;
+    }
+
+    const holes = selectedShapes.filter(shape => shape.isHole);
+    const solids = selectedShapes.filter(shape => !shape.isHole);
+
+    if (holes.length === 0 || solids.length === 0) {
+      showToast('Need at least one solid and one HOLE');
+      return;
+    }
+
+    try {
+      const resultShapes = subtractShapes(solids, holes);
+      if (resultShapes.length === 0) {
+        showToast('Boolean result is empty');
+        return;
+      }
+
+      const removedIds = new Set(selectedShapes.map(shape => shape.id));
+      const nextShapes = [
+        ...shapes.filter(shape => !removedIds.has(shape.id)),
+        ...resultShapes,
+      ];
+
+      setShapes(nextShapes);
+      setGroups(prev => prev.filter(group => nextShapes.some(shape => shape.groupId === group.id)));
+      setSelectedIds(new Set(resultShapes.map(shape => shape.id)));
+      showToast(`Subtracted ${holes.length} hole(s)`);
+    } catch (error) {
+      console.error('Boolean subtract failed', error);
+      showToast('Boolean subtract failed');
+    }
+  }, [selectedIds, shapes, showToast]);
+
   const handleResetCamera = useCallback(() => { setResetCameraFlag(f => f+1); showToast('Camera reset'); }, [showToast]);
 
   const handleDraw = useCallback(() => {
@@ -507,7 +569,7 @@ export default function App() {
 
   // ─── Keyboard shortcuts (desktop only) ───
   useEffect(() => {
-    if (isMobile) return;
+    if (isMobile || isFirstPersonMode) return;
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -538,7 +600,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isMobile, handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
+  }, [isMobile, isFirstPersonMode, handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
 
   return (
     <div className="flex h-screen w-screen bg-[#f4f4f5] dark:bg-[#0a0a0a] overflow-hidden text-gray-800 dark:text-[#E4E3E0]">
@@ -556,6 +618,7 @@ export default function App() {
           onAdd={handleAddShape} onUpdate={handleUpdateShape}
           onDelete={handleDeleteShape} onDeleteSelected={handleDeleteSelected}
           onCopy={handleCopy} onPaste={handlePaste} onDuplicate={handleDuplicate}
+          onToggleHole={handleToggleHole} onBooleanSubtract={handleBooleanSubtract}
           onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
           onToggleGroupCollapse={handleToggleGroupCollapse}
           onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}
@@ -582,6 +645,7 @@ export default function App() {
           onSave={handleSaveProject} onLoad={handleLoadProject}
           onUndo={handleUndo} onRedo={handleRedo}
           canUndo={canUndo} canRedo={canRedo}
+          onFirstPersonChange={setIsFirstPersonMode}
           onClearGuides={() => setActiveGuides([])}
         />
 
@@ -600,6 +664,7 @@ export default function App() {
             onAdd={handleAddShape} onUpdate={handleUpdateShape}
             onDelete={handleDeleteShape} onDeleteSelected={handleDeleteSelected}
             onCopy={handleCopy} onPaste={handlePaste} onDuplicate={handleDuplicate}
+            onToggleHole={handleToggleHole} onBooleanSubtract={handleBooleanSubtract}
             onCreateGroup={handleCreateGroup} onUngroup={handleUngroup}
             onToggleGroupCollapse={handleToggleGroupCollapse}
             onSelectGroup={handleSelectGroup} onRenameGroup={handleRenameGroup}

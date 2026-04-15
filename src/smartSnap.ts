@@ -60,12 +60,20 @@ const SHAPE_HALF_SIZES: Record<string, [number, number, number]> = {
   text: [0.5, 0.25, 0.05],
   hemisphere: [0.5, 0.25, 0.5],
   pipe: [0.5, 0.5, 0.5],
+  elbowPipe: [0.5, 0.5, 0.5],
   roundRoof: [0.5, 0.25, 0.5],
   paraboloid: [0.5, 0.5, 0.5],
+  roundedStairs: [0.5, 0.5, 0.5],
+  drawing: [0.5, 0.5, 0.5],
+  customMesh: [0.5, 0.5, 0.5],
 };
 
 export function getShapeBBox(shape: ShapeData): BBox {
-  const base = SHAPE_HALF_SIZES[shape.type] || [0.5, 0.5, 0.5];
+  const base = shape.geometryBounds ? [
+    (shape.geometryBounds.max[0] - shape.geometryBounds.min[0]) / 2,
+    (shape.geometryBounds.max[1] - shape.geometryBounds.min[1]) / 2,
+    (shape.geometryBounds.max[2] - shape.geometryBounds.min[2]) / 2,
+  ] as [number, number, number] : (SHAPE_HALF_SIZES[shape.type] || [0.5, 0.5, 0.5]);
   const halfSize: [number, number, number] = [
     base[0] * shape.scale[0],
     base[1] * shape.scale[1],
