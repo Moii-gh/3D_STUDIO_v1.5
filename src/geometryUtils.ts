@@ -145,6 +145,8 @@ export function createShapeGeometry(shape: ShapeData) {
       return new THREE.DodecahedronGeometry(0.5);
     case 'prism':
       return new THREE.CylinderGeometry(0.5, 0.5, 1, 3);
+    case 'hexPrism':
+      return new THREE.CylinderGeometry(0.5, 0.5, 1, 6, 1, false, Math.PI / 6);
     case 'icosahedron':
       return new THREE.IcosahedronGeometry(0.5, 0);
     case 'tetrahedron':

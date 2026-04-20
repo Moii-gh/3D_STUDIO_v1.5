@@ -50,6 +50,7 @@ const SHAPE_ICONS: Record<ShapeType, React.ReactNode> = {
   octahedron: <Diamond size={18} />,
   dodecahedron: <Hexagon size={18} />,
   prism: <Triangle size={18} className="rotate-90" />,
+  hexPrism: <Hexagon size={18} />,
   icosahedron: <Globe size={18} />,
   tetrahedron: <Triangle size={18} />,
   torusKnot: <Command size={18} />,
@@ -83,6 +84,7 @@ const SHAPE_LABELS: Record<ShapeType, string> = {
   octahedron: 'OCTA',
   dodecahedron: 'DODE',
   prism: 'PRISM',
+  hexPrism: '6-УГОЛ',
   icosahedron: 'ICOSA',
   tetrahedron: 'TETRA',
   torusKnot: 'KNOT',
@@ -106,7 +108,7 @@ const SHAPE_LABELS: Record<ShapeType, string> = {
 };
 
 const ALL_SHAPES: ShapeType[] = [
-  'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism',
+  'box', 'sphere', 'cylinder', 'cone', 'torus', 'pyramid', 'capsule', 'octahedron', 'dodecahedron', 'prism', 'hexPrism',
   'icosahedron', 'tetrahedron', 'torusKnot', 'ring', 'plane', 'circle', 'star', 'heart', 'arrow', 'cross', 'text', 'image',
   'hemisphere', 'pipe', 'elbowPipe', 'roundRoof', 'paraboloid', 'roundedStairs'
 ];

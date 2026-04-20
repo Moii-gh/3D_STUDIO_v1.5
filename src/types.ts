@@ -1,4 +1,4 @@
-export type ShapeType = 'box' | 'sphere' | 'cylinder' | 'cone' | 'torus' | 'pyramid' | 'capsule' | 'octahedron' | 'dodecahedron' | 'prism' | 'icosahedron' | 'tetrahedron' | 'torusKnot' | 'ring' | 'plane' | 'circle' | 'star' | 'heart' | 'arrow' | 'cross' | 'text' | 'image' | 'hemisphere' | 'pipe' | 'elbowPipe' | 'roundRoof' | 'paraboloid' | 'roundedStairs' | 'drawing' | 'customMesh';
+export type ShapeType = 'box' | 'sphere' | 'cylinder' | 'cone' | 'torus' | 'pyramid' | 'capsule' | 'octahedron' | 'dodecahedron' | 'prism' | 'hexPrism' | 'icosahedron' | 'tetrahedron' | 'torusKnot' | 'ring' | 'plane' | 'circle' | 'star' | 'heart' | 'arrow' | 'cross' | 'text' | 'image' | 'hemisphere' | 'pipe' | 'elbowPipe' | 'roundRoof' | 'paraboloid' | 'roundedStairs' | 'drawing' | 'customMesh';
 
 export interface GeometryData {
   positions: number[];

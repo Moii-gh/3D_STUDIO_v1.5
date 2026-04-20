@@ -28,7 +28,7 @@ interface SceneProps {
   onToggleShaders: () => void;
   onSelect: (id: string | null, additive?: boolean) => void;
   onUpdate: (id: string, updates: Partial<ShapeData>) => void;
-  onGroupTransform: (id: string, updates: Partial<ShapeData>) => void;
+  onGroupTransform: (id: string, updates: Partial<ShapeData>, isDeltaGroup?: boolean) => void;
   onMultiSelect: (ids: string[], additive: boolean) => void;
   onAdd: (type: ShapeType, position?: [number, number, number]) => void;
   onSave: () => void;
@@ -167,6 +167,7 @@ const Shape = ({ shape, isSelected, useShaders, onSelect }: { shape: ShapeData; 
       case 'octahedron': return <octahedronGeometry args={[0.5]} />;
       case 'dodecahedron': return <dodecahedronGeometry args={[0.5]} />;
       case 'prism': return <cylinderGeometry args={[0.5, 0.5, 1, 3]} />;
+      case 'hexPrism': return <cylinderGeometry args={[0.5, 0.5, 1, 6, 1, false, Math.PI / 6]} />;
       case 'icosahedron': return <icosahedronGeometry args={[0.5, 0]} />;
       case 'tetrahedron': return <tetrahedronGeometry args={[0.5, 0]} />;
       case 'torusKnot': return <torusKnotGeometry args={[0.3, 0.1, 64, 16]} />;
@@ -843,6 +844,15 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
   const showGizmo = selectedShape && transformMode !== 'select';
   const activeToolMeta = FPS_TOOLS.find((tool) => tool.id === fpsActiveTool) ?? FPS_TOOLS[0];
 
+  const groupPivot = useMemo(() => {
+    if (selectedIds.size <= 1) return new THREE.Vector3();
+    const selectedObj = shapes.filter(s => selectedIds.has(s.id));
+    const p = new THREE.Vector3();
+    selectedObj.forEach(s => p.add(new THREE.Vector3(...s.position)));
+    p.divideScalar(selectedObj.length);
+    return p;
+  }, [selectedIds, shapes]);
+
   const handleFpsObjectTransform = useCallback((code: string, boost: boolean) => {
     if (!isFirstPerson || isMobile || fpsInventoryOpen || !selectedShape || !primarySelectedId || !cameraRef.current) {
       return false;
@@ -935,7 +945,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
         position: [obj.position.x, obj.position.y, obj.position.z],
         rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
         scale: [obj.scale.x, obj.scale.y, obj.scale.z],
-      });
+      }, selectedIds.size > 1);
     }
     setTimeout(() => onClearGuides(), 300);
   };
@@ -1068,7 +1078,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
 
             const groupElements = Array.from(groups.entries()).map(([gid, members]) => {
               return members.map(shape => {
-                if (shape.id === primarySelectedId && showGizmo) return null;
+                if (selectedIds.has(shape.id) && showGizmo) return null;
                 const isSelected = selectedIds.has(shape.id);
                 return (
                   <Shape key={shape.id} shape={shape} isSelected={isSelected} useShaders={useShaders}
@@ -1081,7 +1091,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             });
 
             const ungroupedElements = ungrouped.map(shape => {
-              if (shape.id === primarySelectedId && showGizmo) return null;
+              if (selectedIds.has(shape.id) && showGizmo) return null;
               const isSelected = selectedIds.has(shape.id);
               return (
                 <Shape key={shape.id} shape={shape} isSelected={isSelected} useShaders={useShaders}
@@ -1103,14 +1113,23 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             rotationSnap={snapToGrid ? Math.PI / 4 : null}
             scaleSnap={snapToGrid ? 0.5 : null}
             onMouseUp={handleTransformChange}
-            position={selectedShape.position}
-            rotation={selectedShape.rotation}
-            scale={selectedShape.scale}
+            position={selectedIds.size > 1 ? groupPivot.toArray() : selectedShape.position}
+            rotation={selectedIds.size > 1 ? [0,0,0] : selectedShape.rotation}
+            scale={selectedIds.size > 1 ? [1,1,1] : selectedShape.scale}
             size={isMobile ? 1.2 : 1}
           >
-            <Shape
-              shape={{...selectedShape, position: [0,0,0], rotation: [0,0,0], scale: [1,1,1]}}
-              isSelected={true} useShaders={useShaders} onSelect={() => {}} />
+            <group>
+              {selectedIds.size > 1 ? (
+                shapes.filter(s => selectedIds.has(s.id)).map(shape => {
+                  const relPos = new THREE.Vector3(...shape.position).sub(groupPivot).toArray();
+                  return <Shape key={shape.id} shape={{...shape, position: relPos}} isSelected={true} useShaders={useShaders} onSelect={() => {}} />
+                })
+              ) : (
+                <Shape
+                  shape={{...selectedShape, position: [0,0,0], rotation: [0,0,0], scale: [1,1,1]}}
+                  isSelected={true} useShaders={useShaders} onSelect={() => {}} />
+              )}
+            </group>
           </TransformControls>
         )}
 
@@ -1161,9 +1180,9 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
             {HOTBAR_BLOCKS.map((block, i) => (
               <button
                 key={block.type}
-                onClick={() => setFpsActiveSlot(i)}
+                onClick={() => setFpsActiveBlockSlot(i)}
                 className={`relative flex flex-col items-center justify-center w-12 h-12 rounded transition-all pointer-events-auto ${
-                  i === fpsActiveSlot
+                  i === fpsActiveBlockSlot
                     ? 'bg-white/30 border-2 border-white scale-110 shadow-lg shadow-white/20'
                     : 'bg-black/40 border border-white/20 hover:bg-black/60'
                 }`}
@@ -1173,7 +1192,7 @@ export default function Scene({ shapes, selectedIds, transformMode, snapToGrid, 
                   style={{ backgroundColor: block.color }}
                 />
                 <span className="absolute -bottom-5 text-[8px] font-mono text-white/60 uppercase tracking-wider whitespace-nowrap">
-                  {i === fpsActiveSlot ? block.label : (i + 1)}
+                  {i === fpsActiveBlockSlot ? block.label : (i + 1)}
                 </span>
               </button>
             ))}

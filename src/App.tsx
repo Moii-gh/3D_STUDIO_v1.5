@@ -28,49 +28,64 @@ export interface ProjectFile {
 const MAX_HISTORY = 50;
 const LOCAL_STORAGE_KEY = '3d-studio-autosave';
 
-function loadAutosave(): { shapes: ShapeData[], groups: GroupData[], history: HistoryEntry[], historyIndex: number } | null {
-  try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && parsed.history && parsed.history.length > 0) {
-        const hIndex = parsed.historyIndex || 0;
-        const entry = parsed.history[hIndex];
-        return {
-          shapes: entry.shapes,
-          groups: entry.groups,
-          history: parsed.history,
-          historyIndex: hIndex,
-        };
+const initDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('3d_studio_db', 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains('autosave')) {
+        request.result.createObjectStore('autosave');
       }
-    }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveToDB = async (data: any) => {
+  try {
+    const db = await initDB();
+    const tx = db.transaction('autosave', 'readwrite');
+    tx.objectStore('autosave').put(data, 'projectData');
   } catch (e) {
-    console.error("Autosave load failed", e);
+    console.error('Failed to autosave DB', e);
   }
-  return null;
-}
+};
+
+const loadFromDB = async (): Promise<any> => {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('autosave', 'readonly');
+      const request = tx.objectStore('autosave').get('projectData');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    return null;
+  }
+};
 
 export default function App() {
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
 
-  const [initialState] = useState(loadAutosave);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [shapes, setShapes] = useState<ShapeData[]>(
-    initialState?.shapes || [
-      {
-        id: 'initial-box',
-        type: 'box',
-        position: [0, 0.5, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        color: '#3b82f6',
-      },
-    ]
-  );
-  const [groups, setGroups] = useState<GroupData[]>(initialState?.groups || []);
+  const [shapes, setShapes] = useState<ShapeData[]>([
+      { id: 'ds-sphere', type: 'sphere', position: [-3, 2, -2], rotation: [0, 0, 0], scale: [4, 4, 4], color: '#888888' },
+      { id: 'ds-dish', type: 'hemisphere', position: [-3, 3.4, -0.6], rotation: [-Math.PI/4, 0, 0], scale: [1.6, 1.6, 1.6], color: '#444444', isHole: true },
+      { id: 'ds-trench', type: 'pipe', position: [-3, 2, -2], rotation: [Math.PI/2, 0, 0], scale: [4.1, 4.1, 0.2], color: '#444444', isHole: true },
+      { id: 'tie-cockpit-base', type: 'sphere', position: [2, 1, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#888888' },
+      { id: 'tie-cockpit-top', type: 'hemisphere', position: [2, 2, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#666666' },
+      { id: 'tie-window-frame', type: 'pipe', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.2, 1.2, 0.2], color: '#333333' },
+      { id: 'tie-window-glass', type: 'sphere', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.1, 1.1, 0.2], color: '#0055ff' },
+      { id: 'tie-wing', type: 'hexPrism', position: [4, 1, 0], rotation: [0, 0, Math.PI/2], scale: [3, 0.2, 3], color: '#555555' },
+      { id: 'tie-axle', type: 'cylinder', position: [3, 1, 0], rotation: [0, 0, Math.PI/2], scale: [0.4, 2, 0.4], color: '#666666' }
+  ]);
+  const [groups, setGroups] = useState<GroupData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(true);
   const [smartSnapEnabled, setSmartSnapEnabled] = useState(true);
   const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
   const [transformMode, setTransformMode] = useState<TransformMode>('select');
@@ -94,35 +109,60 @@ export default function App() {
   }, []);
 
   // ─── Undo / Redo history ───
-  const defaultHistory: HistoryEntry[] = [{ shapes: [{ id: 'initial-box', type: 'box', position: [0,0.5,0], rotation: [0,0,0], scale: [1,1,1], color: '#3b82f6' }], groups: [] }];
-  const historyRef = useRef<HistoryEntry[]>(initialState?.history || defaultHistory);
-  const historyIndexRef = useRef(initialState?.historyIndex || 0);
+  const defaultHistory: HistoryEntry[] = [{ shapes: [
+      { id: 'ds-sphere', type: 'sphere', position: [-3, 2, -2], rotation: [0, 0, 0], scale: [4, 4, 4], color: '#888888' },
+      { id: 'ds-dish', type: 'hemisphere', position: [-3, 3.4, -0.6], rotation: [-Math.PI/4, 0, 0], scale: [1.6, 1.6, 1.6], color: '#444444', isHole: true },
+      { id: 'ds-trench', type: 'pipe', position: [-3, 2, -2], rotation: [Math.PI/2, 0, 0], scale: [4.1, 4.1, 0.2], color: '#444444', isHole: true },
+      { id: 'tie-cockpit-base', type: 'sphere', position: [2, 1, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#888888' },
+      { id: 'tie-cockpit-top', type: 'hemisphere', position: [2, 2, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#666666' },
+      { id: 'tie-window-frame', type: 'pipe', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.2, 1.2, 0.2], color: '#333333' },
+      { id: 'tie-window-glass', type: 'sphere', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.1, 1.1, 0.2], color: '#0055ff' },
+      { id: 'tie-wing', type: 'hexPrism', position: [4, 1, 0], rotation: [0, 0, Math.PI/2], scale: [3, 0.2, 3], color: '#555555' },
+      { id: 'tie-axle', type: 'cylinder', position: [3, 1, 0], rotation: [0, 0, Math.PI/2], scale: [0.4, 2, 0.4], color: '#666666' }
+  ], groups: [] }];
+  
+  const historyRef = useRef<HistoryEntry[]>(defaultHistory);
+  const historyIndexRef = useRef(0);
   const skipHistoryRef = useRef(false);
 
+  useEffect(() => {
+    loadFromDB().then((parsed) => {
+      if (parsed && parsed.history && parsed.history.length > 0) {
+        const hIndex = parsed.historyIndex || 0;
+        const entry = parsed.history[hIndex];
+        setShapes(entry.shapes);
+        setGroups(entry.groups);
+        historyRef.current = parsed.history;
+        historyIndexRef.current = hIndex;
+        prevShapesRef.current = entry.shapes;
+        prevGroupsRef.current = entry.groups;
+      }
+      setIsInitializing(false);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const saveToLocalStorage = useCallback(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-        history: historyRef.current,
-        historyIndex: historyIndexRef.current
-      }));
-    } catch (e) {
-      console.error('Failed to autosave', e);
-    }
+    saveToDB({
+      history: historyRef.current,
+      historyIndex: historyIndexRef.current
+    });
   }, []);
 
   const pushHistory = useCallback((newShapes: ShapeData[], newGroups: GroupData[]) => {
-    if (skipHistoryRef.current) return;
+    if (skipHistoryRef.current || isInitializing) return;
     const idx = historyIndexRef.current;
     historyRef.current = historyRef.current.slice(0, idx + 1);
     historyRef.current.push({ shapes: JSON.parse(JSON.stringify(newShapes)), groups: JSON.parse(JSON.stringify(newGroups)) });
     if (historyRef.current.length > MAX_HISTORY) historyRef.current.shift();
     historyIndexRef.current = historyRef.current.length - 1;
     saveToLocalStorage();
-  }, [saveToLocalStorage]);
+  }, [saveToLocalStorage, isInitializing]);
 
   const prevShapesRef = useRef(shapes);
   const prevGroupsRef = useRef(groups);
   useEffect(() => {
+    if (isInitializing) return;
     const shapesChanged = shapes !== prevShapesRef.current;
     const groupsChanged = groups !== prevGroupsRef.current;
     if (shapesChanged || groupsChanged) {
@@ -130,7 +170,7 @@ export default function App() {
       prevShapesRef.current = shapes;
       prevGroupsRef.current = groups;
     }
-  }, [shapes, groups, pushHistory]);
+  }, [shapes, groups, pushHistory, isInitializing]);
 
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -186,17 +226,30 @@ export default function App() {
     const jsonStr = JSON.stringify(project);
 
     try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: `${name}.json`,
-        types: [{
-          description: '3D Studio Project',
-          accept: { 'application/json': ['.json'] },
-        }],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(jsonStr);
-      await writable.close();
-      showToast(`Сохранено: ${handle.name}`);
+      if ('showSaveFilePicker' in window) {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: `${name}.json`,
+          types: [{
+            description: '3D Studio Project',
+            accept: { 'application/json': ['.json'] },
+          }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(jsonStr);
+        await writable.close();
+        showToast(`Сохранено: ${handle.name}`);
+      } else {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${name}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast(`Сохранено: ${name}.json`);
+      }
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
         showToast('Ошибка сохранения');
@@ -206,15 +259,33 @@ export default function App() {
 
   const handleLoadProject = useCallback(async () => {
     try {
-      const [handle] = await (window as any).showOpenFilePicker({
-        types: [{
-          description: '3D Studio Project',
-          accept: { 'application/json': ['.json'] },
-        }],
-        multiple: false,
-      });
-      const file = await handle.getFile();
-      const text = await file.text();
+      let text: string;
+      if ('showOpenFilePicker' in window) {
+        const [handle] = await (window as any).showOpenFilePicker({
+          types: [{
+            description: '3D Studio Project',
+            accept: { 'application/json': ['.json'] },
+          }],
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        text = await file.text();
+      } else {
+        text = await new Promise((resolve, reject) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json,application/json';
+          input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return reject({ name: 'AbortError' });
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve(ev.target?.result as string);
+            reader.onerror = () => reject(new Error('Read error'));
+            reader.readAsText(file);
+          };
+          input.click();
+        });
+      }
       const project: ProjectFile = JSON.parse(text);
 
       if (!project.version || !project.history?.length) {
@@ -319,60 +390,52 @@ export default function App() {
     });
   }, [snapToGrid, smartSnapEnabled]);
 
-  const handleGroupTransform = useCallback((id: string, updates: Partial<ShapeData>) => {
+  const handleGroupTransform = useCallback((id: string, updates: Partial<ShapeData>, isDeltaGroup?: boolean) => {
     setShapes(prev => {
       const primary = prev.find(s => s.id === id);
       if (!primary) return prev;
 
-      const groupMembers = primary.groupId ? prev.filter(s => s.groupId === primary.groupId) : [primary];
-      
-      // ─── Proper Group Transformation ───
-      // If ONLY ONE object is selected (even if in a group), transform ONLY that object.
-      // This allows interactive "scaling of the cutter" inside the group.
-      // If more than 1 object is selected, we assume group movement.
       if (selectedIds.size <= 1) {
         return prev.map(s => s.id === id ? { ...s, ...updates } : s);
       }
 
-      if (groupMembers.length <= 1) {
-        return prev.map(s => s.id === id ? { ...s, ...updates } : s);
-      }
-      // 1. Compute group center (pivot)
+      const groupMembers = prev.filter(s => selectedIds.has(s.id));
+      
       const pivot = new THREE.Vector3(0, 0, 0);
       groupMembers.forEach(m => { pivot.x += m.position[0]; pivot.y += m.position[1]; pivot.z += m.position[2]; });
       pivot.divideScalar(groupMembers.length);
 
-      // 2. Identify Deltas from Primary
-      // We use the change in primary relative to its OLD state to define the group transform
-      const oldPos = new THREE.Vector3(...primary.position);
-      const newPos = updates.position ? new THREE.Vector3(...updates.position) : oldPos.clone();
-      
-      const oldRot = new THREE.Euler(...primary.rotation);
-      const newRot = updates.rotation ? new THREE.Euler(...updates.rotation) : oldRot.clone();
-      
-      const oldQuat = new THREE.Quaternion().setFromEuler(oldRot);
-      const newQuat = new THREE.Quaternion().setFromEuler(newRot);
-      const deltaQuat = new THREE.Quaternion().multiplyQuaternions(newQuat, oldQuat.clone().invert());
+      let posDelta = new THREE.Vector3();
+      let deltaQuat = new THREE.Quaternion();
+      let scaleFactor = new THREE.Vector3(1, 1, 1);
 
-      const oldScale = new THREE.Vector3(...primary.scale);
-      const newScale = updates.scale ? new THREE.Vector3(...updates.scale) : oldScale.clone();
-      const scaleFactor = new THREE.Vector3(newScale.x / oldScale.x, newScale.y / oldScale.y, newScale.z / oldScale.z);
+      if (isDeltaGroup) {
+         if (updates.position) posDelta.subVectors(new THREE.Vector3(...updates.position), pivot);
+         if (updates.rotation) deltaQuat.setFromEuler(new THREE.Euler(...updates.rotation));
+         if (updates.scale) scaleFactor.set(...updates.scale);
+      } else {
+         const oldPos = new THREE.Vector3(...primary.position);
+         const newPos = updates.position ? new THREE.Vector3(...updates.position) : oldPos.clone();
+         posDelta.subVectors(newPos, oldPos);
+         const oldRot = new THREE.Euler(...primary.rotation);
+         const newRot = updates.rotation ? new THREE.Euler(...updates.rotation) : oldRot.clone();
+         deltaQuat.multiplyQuaternions(new THREE.Quaternion().setFromEuler(newRot), new THREE.Quaternion().setFromEuler(oldRot).invert());
+         const oldScale = new THREE.Vector3(...primary.scale);
+         const newScale = updates.scale ? new THREE.Vector3(...updates.scale) : oldScale.clone();
+         scaleFactor.set(newScale.x / oldScale.x, newScale.y / oldScale.y, newScale.z / oldScale.z);
+      }
 
       return prev.map(shape => {
-        if (!primary.groupId || shape.groupId !== primary.groupId) return shape;
+        if (!selectedIds.has(shape.id)) return shape;
 
         const ns = { ...shape };
         const shapePos = new THREE.Vector3(...shape.position);
         
-        // --- Apply Transform ---
-        
-        // Scaling around pivot
         if (updates.scale) {
           shapePos.sub(pivot).multiply(scaleFactor).add(pivot);
           ns.scale = [shape.scale[0] * scaleFactor.x, shape.scale[1] * scaleFactor.y, shape.scale[2] * scaleFactor.z];
         }
 
-        // Rotation around pivot
         if (updates.rotation) {
           shapePos.sub(pivot).applyQuaternion(deltaQuat).add(pivot);
           const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...shape.rotation));
@@ -381,15 +444,12 @@ export default function App() {
           ns.rotation = [e.x, e.y, e.z];
         }
 
-        // Translation
         if (updates.position) {
-          const posDelta = new THREE.Vector3().subVectors(newPos, oldPos);
           shapePos.add(posDelta);
         }
 
         ns.position = [shapePos.x, shapePos.y, shapePos.z];
 
-        // Grid Snap (if enabled)
         if (snapToGrid && updates.position) {
           ns.position = [Math.round(ns.position[0]*2)/2, Math.round(ns.position[1]*2)/2, Math.round(ns.position[2]*2)/2];
         }
@@ -397,7 +457,7 @@ export default function App() {
         return ns;
       });
     });
-  }, [snapToGrid, smartSnapEnabled]);
+  }, [selectedIds, snapToGrid, smartSnapEnabled]);
 
   const handleDeleteShape = useCallback((id: string) => {
     setShapes(prev => prev.filter(s => s.id !== id));
@@ -521,27 +581,33 @@ export default function App() {
       return;
     }
 
-    try {
-      const resultShapes = subtractShapes(solids, holes);
-      if (resultShapes.length === 0) {
-        showToast('Boolean result is empty');
-        return;
+    setIsProcessing(true);
+    setTimeout(() => {
+      try {
+        const resultShapes = subtractShapes(solids, holes);
+        if (resultShapes.length === 0) {
+          showToast('Boolean result is empty');
+          setIsProcessing(false);
+          return;
+        }
+
+        const removedIds = new Set(selectedShapes.map(shape => shape.id));
+        const nextShapes = [
+          ...shapes.filter(shape => !removedIds.has(shape.id)),
+          ...resultShapes,
+        ];
+
+        setShapes(nextShapes);
+        setGroups(prev => prev.filter(group => nextShapes.some(shape => shape.groupId === group.id)));
+        setSelectedIds(new Set(resultShapes.map(shape => shape.id)));
+        showToast(`Subtracted ${holes.length} hole(s)`);
+      } catch (error) {
+        console.error('Boolean subtract failed', error);
+        showToast('Boolean subtract failed');
+      } finally {
+        setIsProcessing(false);
       }
-
-      const removedIds = new Set(selectedShapes.map(shape => shape.id));
-      const nextShapes = [
-        ...shapes.filter(shape => !removedIds.has(shape.id)),
-        ...resultShapes,
-      ];
-
-      setShapes(nextShapes);
-      setGroups(prev => prev.filter(group => nextShapes.some(shape => shape.groupId === group.id)));
-      setSelectedIds(new Set(resultShapes.map(shape => shape.id)));
-      showToast(`Subtracted ${holes.length} hole(s)`);
-    } catch (error) {
-      console.error('Boolean subtract failed', error);
-      showToast('Boolean subtract failed');
-    }
+    }, 50);
   }, [selectedIds, shapes, showToast]);
 
   const handleResetCamera = useCallback(() => { setResetCameraFlag(f => f+1); showToast('Camera reset'); }, [showToast]);
@@ -602,9 +668,27 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [isMobile, isFirstPersonMode, handleCopy, handlePaste, handleSelectAll, handleDuplicate, handleCreateGroup, handleDeleteSelected, handleDeselectAll, handleResetCamera, handleUndo, handleRedo, showToast]);
 
+  if (isInitializing) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1a1a] text-black dark:text-white">
+        Loading...
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-screen bg-[#f4f4f5] dark:bg-[#0a0a0a] overflow-hidden text-gray-800 dark:text-[#E4E3E0]">
-      {/* Desktop sidebar */}
+    <div className={`flex w-screen h-screen overflow-hidden ${theme === 'dark' ? 'dark text-white bg-[#0a0a0a]' : 'text-gray-900 bg-gray-50'}`}>
+      
+      {isProcessing && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
+          <div className="bg-white dark:bg-[#202020] p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4 border border-black/10 dark:border-white/10">
+            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-mono text-sm uppercase tracking-widest text-black/70 dark:text-[#E4E3E0]">Выполняется резка...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main UI layout */}
       {!isMobile && (
         <Sidebar
           shapes={shapes} groups={groups} selectedIds={selectedIds}

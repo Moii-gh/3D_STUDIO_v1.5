@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CSG } from 'three-csg-ts';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createShapeGeometry, getEffectiveRotation, serializeGeometry } from './geometryUtils';
 import { ShapeData, ShapeType } from './types';
 
@@ -66,8 +67,9 @@ export function subtractShapes(solids: ShapeData[], holes: ShapeData[]) {
       currentMesh.updateMatrixWorld(true);
     });
 
-    const geometry = currentMesh.geometry.clone();
+    let geometry = currentMesh.geometry.clone();
     geometry.applyMatrix4(currentMesh.matrix);
+    geometry = BufferGeometryUtils.mergeVertices(geometry);
     geometry.computeVertexNormals();
     geometry.computeBoundingBox();
 
