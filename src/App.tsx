@@ -73,15 +73,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [shapes, setShapes] = useState<ShapeData[]>([
-      { id: 'ds-sphere', type: 'sphere', position: [-3, 2, -2], rotation: [0, 0, 0], scale: [4, 4, 4], color: '#888888' },
-      { id: 'ds-dish', type: 'hemisphere', position: [-3, 3.4, -0.6], rotation: [-Math.PI/4, 0, 0], scale: [1.6, 1.6, 1.6], color: '#444444', isHole: true },
-      { id: 'ds-trench', type: 'pipe', position: [-3, 2, -2], rotation: [Math.PI/2, 0, 0], scale: [4.1, 4.1, 0.2], color: '#444444', isHole: true },
-      { id: 'tie-cockpit-base', type: 'sphere', position: [2, 1, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#888888' },
-      { id: 'tie-cockpit-top', type: 'hemisphere', position: [2, 2, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#666666' },
-      { id: 'tie-window-frame', type: 'pipe', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.2, 1.2, 0.2], color: '#333333' },
-      { id: 'tie-window-glass', type: 'sphere', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.1, 1.1, 0.2], color: '#0055ff' },
-      { id: 'tie-wing', type: 'hexPrism', position: [4, 1, 0], rotation: [0, 0, Math.PI/2], scale: [3, 0.2, 3], color: '#555555' },
-      { id: 'tie-axle', type: 'cylinder', position: [3, 1, 0], rotation: [0, 0, Math.PI/2], scale: [0.4, 2, 0.4], color: '#666666' }
+      { id: 'default-box', type: 'box', position: [0, 0.5, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: '#3b82f6' }
   ]);
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -110,15 +102,7 @@ export default function App() {
 
   // ─── Undo / Redo history ───
   const defaultHistory: HistoryEntry[] = [{ shapes: [
-      { id: 'ds-sphere', type: 'sphere', position: [-3, 2, -2], rotation: [0, 0, 0], scale: [4, 4, 4], color: '#888888' },
-      { id: 'ds-dish', type: 'hemisphere', position: [-3, 3.4, -0.6], rotation: [-Math.PI/4, 0, 0], scale: [1.6, 1.6, 1.6], color: '#444444', isHole: true },
-      { id: 'ds-trench', type: 'pipe', position: [-3, 2, -2], rotation: [Math.PI/2, 0, 0], scale: [4.1, 4.1, 0.2], color: '#444444', isHole: true },
-      { id: 'tie-cockpit-base', type: 'sphere', position: [2, 1, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#888888' },
-      { id: 'tie-cockpit-top', type: 'hemisphere', position: [2, 2, 0], rotation: [0, 0, 0], scale: [2, 2, 2], color: '#666666' },
-      { id: 'tie-window-frame', type: 'pipe', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.2, 1.2, 0.2], color: '#333333' },
-      { id: 'tie-window-glass', type: 'sphere', position: [2, 1, 1], rotation: [0, 0, 0], scale: [1.1, 1.1, 0.2], color: '#0055ff' },
-      { id: 'tie-wing', type: 'hexPrism', position: [4, 1, 0], rotation: [0, 0, Math.PI/2], scale: [3, 0.2, 3], color: '#555555' },
-      { id: 'tie-axle', type: 'cylinder', position: [3, 1, 0], rotation: [0, 0, Math.PI/2], scale: [0.4, 2, 0.4], color: '#666666' }
+      { id: 'default-box', type: 'box', position: [0, 0.5, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: '#3b82f6' }
   ], groups: [] }];
   
   const historyRef = useRef<HistoryEntry[]>(defaultHistory);
